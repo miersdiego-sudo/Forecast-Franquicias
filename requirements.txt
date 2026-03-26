@@ -6,3 +6,4 @@ prophet
 chronos-forecast
 scikit-learn
 openpyxl
+transformers
