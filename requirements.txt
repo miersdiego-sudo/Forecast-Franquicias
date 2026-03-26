@@ -3,6 +3,6 @@ pandas
 torch
 plotly
 prophet
-chronos
+chronos-forecast
 scikit-learn
 openpyxl
