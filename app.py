@@ -31,7 +31,7 @@ PROYECTOS_PATH = "proyectos/"
 
 # Usuarios autorizados
 USUARIOS = {
-    "admin": "admin123",
+    "amandau": "amandau_2026",
     "analista": "pronostico2024"
 }
 
