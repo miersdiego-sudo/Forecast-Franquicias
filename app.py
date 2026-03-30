@@ -49,6 +49,9 @@ def guardar_proyecto_github(nombre_proyecto, df_final, df_agg, fechas_dt, usar_c
     # Convertir fechas a string para JSON
     fechas_str = [f.strftime('%Y-%m-%d') for f in fechas_dt]
     
+    # Convertir hist_totales a lista de valores (sin fechas como claves)
+    hist_totales_list = hist_totales.tolist() if hist_totales is not None else None
+    
     # Preparar datos
     datos = {
         'nombre': nombre_proyecto,
@@ -59,7 +62,7 @@ def guardar_proyecto_github(nombre_proyecto, df_final, df_agg, fechas_dt, usar_c
         'horizonte': horizonte,
         'nombres_columnas_pron': nombres_columnas_pron,
         'rango_ventas': rango_ventas,
-        'hist_totales': hist_totales.to_dict() if hist_totales is not None else None,
+        'hist_totales': hist_totales_list,
         'fecha_creacion': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
     
@@ -95,8 +98,9 @@ def cargar_proyecto_github(nombre_proyecto):
         datos['df_agg'] = pd.DataFrame(datos['df_agg'])
         # Convertir fechas de string a datetime
         datos['fechas_dt'] = pd.to_datetime(datos['fechas_dt'])
+        # Reconstruir hist_totales como Serie con las fechas como índice
         if datos['hist_totales']:
-            datos['hist_totales'] = pd.Series(datos['hist_totales'])
+            datos['hist_totales'] = pd.Series(datos['hist_totales'], index=datos['fechas_dt'])
         return datos
     return None
     
