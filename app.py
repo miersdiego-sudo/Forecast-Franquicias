@@ -271,7 +271,7 @@ def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_cola
     return df_final, df_agg, fechas_dt, hist_totales, nombres_columnas_pron, usar_colaborado
 
 # =====================================================
-# 5. FUNCIONES DE VISUALIZACIÓN (igual que antes)
+# 5. FUNCIONES DE VISUALIZACIÓN
 # =====================================================
 
 def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt, 
@@ -298,14 +298,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     if prod_sel:
         df_filt = df_filt[df_filt['DESCRIPCION'] == prod_sel]
 
-    st.sidebar.markdown("---")
-    col_min, col_max = st.sidebar.columns(2)
-    with col_min:
-        filtro_min = st.number_input("REAL mín.", value=0, step=1)
-    with col_max:
-        filtro_max = st.number_input("REAL máx.", value=100000, step=1000)
-    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
-
+    # --- KPIs ---
     total_real = int(df_agg['REAL_ULTIMO'].sum())
     total_pron = int(df_agg['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
@@ -332,7 +325,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # Gráfico
+    # --- GRÁFICO ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -363,8 +356,20 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
                       xaxis=dict(tickformat="%d/%m/%Y", tickangle=45))
     st.plotly_chart(fig, use_container_width=True)
 
-    # Tabla
-    st.subheader("📋 Detalle por producto (agregado)")
+    # --- TABLA DE PRODUCTOS (con filtro de REAL en la misma línea que el título) ---
+    col_titulo1, col_titulo2 = st.columns([3, 2])
+    with col_titulo1:
+        st.subheader("📋 Detalle por producto (agregado)")
+    with col_titulo2:
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+
+    # Aplicar filtro de REAL a la tabla
+    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
+
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
     columnas_pron = nombres_columnas_pron[:min(horizonte, 6)]
@@ -373,7 +378,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     columnas_tabla = columnas_fijas + columnas_pron
     st.dataframe(df_filt[columnas_tabla], use_container_width=True)
 
-    # Descarga
+    # --- DESCARGA EXCEL ---
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_final.to_excel(writer, sheet_name='Pronósticos (líneas)', index=False)
