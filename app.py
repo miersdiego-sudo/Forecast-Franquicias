@@ -17,7 +17,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Pronóstico IA - Amandau", layout="wide")
 
-# --- ESTILOS CSS PARA BORDES EN KPIs Y GRÁFICO ---
+# --- ESTILOS CSS PARA BORDES ---
 st.markdown("""
 <style>
     /* Bordes para KPIs */
@@ -33,7 +33,7 @@ st.markdown("""
     }
     
     /* Borde para el gráfico */
-    .chart-container {
+    .stPlotlyChart {
         border: 1px solid #e0e0e0;
         border-radius: 10px;
         padding: 10px;
@@ -41,6 +41,21 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         margin-top: 10px;
         margin-bottom: 10px;
+    }
+    
+    /* Borde para recuadros de filtros */
+    .filtros-container {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 15px;
+        background-color: #fafafa;
+        margin-bottom: 15px;
+    }
+    .filtros-container h4 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        color: #333;
+        font-size: 16px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -310,21 +325,54 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     nombre_ultimo = ultimo_mes.strftime('%b %Y')
     nombre_siguiente = siguiente_mes.strftime('%b %Y')
 
-    st.sidebar.header("🔍 Filtros para tabla de productos")
-
-    gerencias = sorted(df_agg['GERENCIA'].unique())
-    gerencias_sel = st.sidebar.multiselect("Gerencia", gerencias, default=gerencias)
-    df_filt = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)] if gerencias_sel else df_agg
-
-    familias = sorted(df_filt['ARTICULO_FAMILIA'].unique())
-    familias_sel = st.sidebar.multiselect("Familia", familias, default=familias)
-    df_filt = df_filt[df_filt['ARTICULO_FAMILIA'].isin(familias_sel)] if familias_sel else df_filt
-
-    productos = sorted(df_filt['DESCRIPCION'].unique())
-    prod_sel = st.sidebar.selectbox("Producto (búsqueda)", options=[""] + productos, index=0,
-                                    format_func=lambda x: "🔍 Buscar..." if x == "" else x)
+    # --- FILTROS CON BORDE (Gerencia, Familia, Producto) ---
+    st.markdown('<div class="filtros-container">', unsafe_allow_html=True)
+    st.markdown('<h4>🔍 Filtros de productos</h4>', unsafe_allow_html=True)
+    
+    col_f1, col_f2, col_f3 = st.columns(3)
+    
+    with col_f1:
+        gerencias = sorted(df_agg['GERENCIA'].unique())
+        gerencias_sel = st.multiselect("Gerencia", gerencias, default=gerencias)
+    
+    # Filtrar por gerencia seleccionada
+    if gerencias_sel:
+        df_filt = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
+    else:
+        df_filt = df_agg
+    
+    with col_f2:
+        familias = sorted(df_filt['ARTICULO_FAMILIA'].unique())
+        familias_sel = st.multiselect("Familia", familias, default=familias)
+    
+    # Filtrar por familia seleccionada
+    if familias_sel:
+        df_filt = df_filt[df_filt['ARTICULO_FAMILIA'].isin(familias_sel)]
+    
+    with col_f3:
+        productos = sorted(df_filt['DESCRIPCION'].unique())
+        prod_sel = st.selectbox("Producto (búsqueda)", options=[""] + productos, index=0,
+                                format_func=lambda x: "🔍 Buscar..." if x == "" else x)
+    
     if prod_sel:
         df_filt = df_filt[df_filt['DESCRIPCION'] == prod_sel]
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- FILTROS DE REAL CON BORDE ---
+    st.markdown('<div class="filtros-container">', unsafe_allow_html=True)
+    st.markdown('<h4>💰 Filtro por ventas reales</h4>', unsafe_allow_html=True)
+    
+    col_min, col_max = st.columns(2)
+    with col_min:
+        filtro_min = st.number_input("REAL mín.", value=0, step=1)
+    with col_max:
+        filtro_max = st.number_input("REAL máx.", value=100000, step=1000)
+    
+    # Aplicar filtro de REAL
+    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # --- KPIs ---
     total_real = int(df_agg['REAL_ULTIMO'].sum())
@@ -353,7 +401,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO CON BORDE ---
+    # --- GRÁFICO ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -383,23 +431,15 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
                       yaxis_title="Ventas (unidades)", hovermode="x unified",
                       xaxis=dict(tickformat="%d/%m/%Y", tickangle=45))
     
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- TABLA DE PRODUCTOS (con filtro de REAL en la misma línea que el título) ---
+    # --- TABLA DE PRODUCTOS ---
     col_titulo1, col_titulo2 = st.columns([3, 2])
     with col_titulo1:
         st.subheader("📋 Detalle por producto (agregado)")
     with col_titulo2:
-        col_min, col_max = st.columns(2)
-        with col_min:
-            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
-        with col_max:
-            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
-
-    # Aplicar filtro de REAL a la tabla
-    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
+        # Mostrar los valores del filtro aplicado
+        st.caption(f"Filtro REAL: {filtro_min} - {filtro_max}")
 
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
