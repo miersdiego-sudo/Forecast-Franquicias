@@ -46,12 +46,15 @@ def guardar_proyecto_github(nombre_proyecto, df_final, df_agg, fechas_dt, usar_c
         return guardar_proyecto_local(nombre_proyecto, df_final, df_agg, fechas_dt, usar_colaborado,
                                       horizonte, nombres_columnas_pron, rango_ventas, hist_totales)
     
+    # Convertir fechas a string para JSON
+    fechas_str = [f.strftime('%Y-%m-%d') for f in fechas_dt]
+    
     # Preparar datos
     datos = {
         'nombre': nombre_proyecto,
         'df_final': df_final.to_dict(),
         'df_agg': df_agg.to_dict(),
-        'fechas_dt': [str(f) for f in fechas_dt],
+        'fechas_dt': fechas_str,
         'usar_colaborado': usar_colaborado,
         'horizonte': horizonte,
         'nombres_columnas_pron': nombres_columnas_pron,
@@ -73,7 +76,7 @@ def guardar_proyecto_github(nombre_proyecto, df_final, df_agg, fechas_dt, usar_c
     
     result = requests.put(url, headers=headers, data=json.dumps(data))
     return result.status_code in [200, 201]
-
+                                
 def cargar_proyecto_github(nombre_proyecto):
     """Carga un proyecto desde GitHub"""
     if not GITHUB_TOKEN:
@@ -90,12 +93,13 @@ def cargar_proyecto_github(nombre_proyecto):
         
         datos['df_final'] = pd.DataFrame(datos['df_final'])
         datos['df_agg'] = pd.DataFrame(datos['df_agg'])
+        # Convertir fechas de string a datetime
         datos['fechas_dt'] = pd.to_datetime(datos['fechas_dt'])
         if datos['hist_totales']:
             datos['hist_totales'] = pd.Series(datos['hist_totales'])
         return datos
     return None
-
+    
 def listar_proyectos_github():
     """Lista todos los proyectos guardados en GitHub"""
     if not GITHUB_TOKEN:
