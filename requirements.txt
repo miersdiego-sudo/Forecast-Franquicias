@@ -3,7 +3,8 @@ pandas
 torch
 plotly
 prophet
-chronos-forecast
+git+https://github.com/amazon-science/chronos-forecasting.git
 scikit-learn
 openpyxl
 transformers
+accelerate
