@@ -3,12 +3,11 @@ import pandas as pd
 import torch
 import plotly.graph_objects as go
 from prophet import Prophet
+from chronos import ChronosPipeline
 from sklearn.metrics import mean_absolute_percentage_error
 import time
 import os
-import json
-import base64
-import requests
+import pickle
 from io import BytesIO
 from datetime import datetime
 
@@ -18,16 +17,10 @@ from datetime import datetime
 
 st.set_page_config(page_title="Pronóstico IA - Amandau", layout="wide")
 
-# Directorio local de proyectos (fallback)
+# Directorio de proyectos
 PROYECTOS_DIR = "proyectos"
 if not os.path.exists(PROYECTOS_DIR):
     os.makedirs(PROYECTOS_DIR)
-
-# Configuración de GitHub
-GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
-GITHUB_REPO = "miersdiego-sudo/forecast-franquicias"
-GITHUB_BRANCH = "main"
-PROYECTOS_PATH = "proyectos/"
 
 # Usuarios autorizados
 USUARIOS = {
@@ -36,159 +29,72 @@ USUARIOS = {
 }
 
 # =====================================================
-# 2. FUNCIONES DE GITHUB PARA PROYECTOS
+# 2. FUNCIONES DE AUTENTICACIÓN Y PROYECTOS
 # =====================================================
 
-def guardar_proyecto_github(nombre_proyecto, df_final, df_agg, fechas_dt, usar_colaborado, 
-                            horizonte, nombres_columnas_pron, rango_ventas, hist_totales):
-    """Guarda un proyecto en GitHub como archivo JSON"""
-    if not GITHUB_TOKEN:
-        return guardar_proyecto_local(nombre_proyecto, df_final, df_agg, fechas_dt, usar_colaborado,
-                                      horizonte, nombres_columnas_pron, rango_ventas, hist_totales)
-    
-    # Convertir fechas a string para JSON
-    fechas_str = [f.strftime('%Y-%m-%d') for f in fechas_dt]
-    
-    # Convertir hist_totales a lista de valores (sin fechas como claves)
-    hist_totales_list = hist_totales.tolist() if hist_totales is not None else None
-    
-    # Preparar datos
+def verificar_login(usuario, password):
+    return usuario in USUARIOS and USUARIOS[usuario] == password
+
+def guardar_proyecto(nombre_proyecto, df_final, df_agg, fechas_dt, usar_colaborado, 
+                     horizonte, nombres_columnas_pron, rango_ventas, hist_totales):
+    proyecto_path = os.path.join(PROYECTOS_DIR, f"{nombre_proyecto}.pkl")
     datos = {
         'nombre': nombre_proyecto,
-        'df_final': df_final.to_dict(),
-        'df_agg': df_agg.to_dict(),
-        'fechas_dt': fechas_str,
+        'df_final': df_final,
+        'df_agg': df_agg,
+        'fechas_dt': fechas_dt,
         'usar_colaborado': usar_colaborado,
         'horizonte': horizonte,
         'nombres_columnas_pron': nombres_columnas_pron,
         'rango_ventas': rango_ventas,
-        'hist_totales': hist_totales_list,
+        'hist_totales': hist_totales,
         'fecha_creacion': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
-    
-    contenido = json.dumps(datos, default=str)
-    contenido_base64 = base64.b64encode(contenido.encode()).decode()
-    
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROYECTOS_PATH}{nombre_proyecto}.json"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    data = {"message": f"Guardar proyecto {nombre_proyecto}", "content": contenido_base64, "branch": GITHUB_BRANCH}
-    
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        data['sha'] = response.json()['sha']
-    
-    result = requests.put(url, headers=headers, data=json.dumps(data))
-    return result.status_code in [200, 201]
-                                
-def cargar_proyecto_github(nombre_proyecto):
-    """Carga un proyecto desde GitHub"""
-    if not GITHUB_TOKEN:
-        return cargar_proyecto_local(nombre_proyecto)
-    
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROYECTOS_PATH}{nombre_proyecto}.json"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        contenido = response.json()
-        contenido_decodificado = base64.b64decode(contenido['content']).decode()
-        datos = json.loads(contenido_decodificado)
-        
-        datos['df_final'] = pd.DataFrame(datos['df_final'])
-        datos['df_agg'] = pd.DataFrame(datos['df_agg'])
-        # Convertir fechas de string a datetime
-        datos['fechas_dt'] = pd.to_datetime(datos['fechas_dt'])
-        # Reconstruir hist_totales como Serie con las fechas como índice
-        if datos['hist_totales']:
-            datos['hist_totales'] = pd.Series(datos['hist_totales'], index=datos['fechas_dt'])
-        return datos
-    return None
-    
-def listar_proyectos_github():
-    """Lista todos los proyectos guardados en GitHub"""
-    if not GITHUB_TOKEN:
-        return listar_proyectos_local()
-    
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROYECTOS_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        archivos = response.json()
-        proyectos = []
-        for archivo in archivos:
-            if archivo['name'].endswith('.json'):
-                nombre = archivo['name'][:-5]
-                proyectos.append({'nombre': nombre, 'fecha_creacion': 'GitHub', 'horizonte': 12})
-        return proyectos
-    return []
-
-def eliminar_proyecto_github(nombre_proyecto):
-    """Elimina un proyecto de GitHub"""
-    if not GITHUB_TOKEN:
-        return eliminar_proyecto_local(nombre_proyecto)
-    
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{PROYECTOS_PATH}{nombre_proyecto}.json"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        sha = response.json()['sha']
-        data = {"message": f"Eliminar proyecto {nombre_proyecto}", "sha": sha, "branch": GITHUB_BRANCH}
-        result = requests.delete(url, headers=headers, data=json.dumps(data))
-        return result.status_code == 200
-    return False
-
-# Funciones locales (fallback)
-def guardar_proyecto_local(nombre_proyecto, df_final, df_agg, fechas_dt, usar_colaborado, 
-                           horizonte, nombres_columnas_pron, rango_ventas, hist_totales):
-    proyecto_path = os.path.join(PROYECTOS_DIR, f"{nombre_proyecto}.pkl")
-    datos = {'nombre': nombre_proyecto, 'df_final': df_final, 'df_agg': df_agg, 'fechas_dt': fechas_dt,
-             'usar_colaborado': usar_colaborado, 'horizonte': horizonte,
-             'nombres_columnas_pron': nombres_columnas_pron, 'rango_ventas': rango_ventas,
-             'hist_totales': hist_totales, 'fecha_creacion': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     with open(proyecto_path, 'wb') as f:
         pickle.dump(datos, f)
     return True
 
-def cargar_proyecto_local(nombre_proyecto):
+def cargar_proyecto(nombre_proyecto):
     proyecto_path = os.path.join(PROYECTOS_DIR, f"{nombre_proyecto}.pkl")
     if os.path.exists(proyecto_path):
         with open(proyecto_path, 'rb') as f:
             return pickle.load(f)
     return None
 
-def listar_proyectos_local():
+def listar_proyectos():
     proyectos = []
     for archivo in os.listdir(PROYECTOS_DIR):
         if archivo.endswith('.pkl'):
             nombre = archivo[:-4]
-            proyectos.append({'nombre': nombre, 'fecha_creacion': 'Local', 'horizonte': 12})
-    return proyectos
+            with open(os.path.join(PROYECTOS_DIR, archivo), 'rb') as f:
+                datos = pickle.load(f)
+                proyectos.append({
+                    'nombre': nombre,
+                    'fecha_creacion': datos.get('fecha_creacion', 'Desconocida'),
+                    'horizonte': datos.get('horizonte', 12)
+                })
+    return sorted(proyectos, key=lambda x: x['fecha_creacion'], reverse=True)
 
-def eliminar_proyecto_local(nombre_proyecto):
+def eliminar_proyecto(nombre_proyecto):
     proyecto_path = os.path.join(PROYECTOS_DIR, f"{nombre_proyecto}.pkl")
     if os.path.exists(proyecto_path):
         os.remove(proyecto_path)
         return True
     return False
 
-# Usar funciones de GitHub si hay token, si no, usar locales
-guardar_proyecto = guardar_proyecto_github if GITHUB_TOKEN else guardar_proyecto_local
-cargar_proyecto = cargar_proyecto_github if GITHUB_TOKEN else cargar_proyecto_local
-listar_proyectos = listar_proyectos_github if GITHUB_TOKEN else listar_proyectos_local
-eliminar_proyecto = eliminar_proyecto_github if GITHUB_TOKEN else eliminar_proyecto_local
-
 # =====================================================
-# 3. AUTENTICACIÓN
+# 3. FUNCIONES DE MODELOS
 # =====================================================
 
-def verificar_login(usuario, password):
-    return usuario in USUARIOS and USUARIOS[usuario] == password
+@st.cache_resource
+def cargar_modelo():
+    return ChronosPipeline.from_pretrained(
+        "amazon/chronos-t5-tiny",
+        device_map="cpu",
+        torch_dtype=torch.float32
+    )
 
-# =====================================================
-# 4. FUNCIONES DE MODELOS (SOLO PROPHET)
-# =====================================================
+pipeline = cargar_modelo()
 
 def fit_prophet(serie, periods, regressors_df=None):
     try:
@@ -218,8 +124,23 @@ def fit_prophet(serie, periods, regressors_df=None):
         last_val = float(serie.iloc[-1])
         return [last_val] * periods
 
+def fit_chronos(serie, periods):
+    try:
+        context = torch.tensor(serie.values, dtype=torch.float32)
+        forecast = pipeline.predict(context, prediction_length=periods)
+        preds = forecast.mean(dim=0).numpy().flatten()
+        preds = [max(0, float(p)) for p in preds]
+        if len(preds) > periods:
+            preds = preds[:periods]
+        elif len(preds) < periods:
+            preds += [0.0] * (periods - len(preds))
+        return preds
+    except Exception:
+        last_val = float(serie.iloc[-1])
+        return [last_val] * periods
+
 # =====================================================
-# 5. FUNCIONES DE PROCESAMIENTO
+# 4. FUNCIONES DE PROCESAMIENTO
 # =====================================================
 
 def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_colaborado):
@@ -276,12 +197,29 @@ def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_cola
         else:
             colab_val = None
 
-        p_ultimo = fit_prophet(serie_hasta_anteultimo, 1)[0]
-        mape = mean_absolute_percentage_error([real_ultimo + 1], [p_ultimo + 1])
-        pronosticos = fit_prophet(serie_full, horizonte)
+        # Prophet
+        p_ultimo_prophet = fit_prophet(serie_hasta_anteultimo, 1)[0]
+        # Chronos
+        p_ultimo_chronos = fit_chronos(serie_hasta_anteultimo, 1)[0]
+
+        mape_p = mean_absolute_percentage_error([real_ultimo + 1], [p_ultimo_prophet + 1])
+        mape_c = mean_absolute_percentage_error([real_ultimo + 1], [p_ultimo_chronos + 1])
+
+        if mape_p <= mape_c:
+            mejor_modelo = "Prophet"
+            mape_elegido = mape_p
+            pron_ultimo = p_ultimo_prophet
+            pronosticos = fit_prophet(serie_full, horizonte)
+        else:
+            mejor_modelo = "Chronos"
+            mape_elegido = mape_c
+            pron_ultimo = p_ultimo_chronos
+            pronosticos = fit_chronos(serie_full, horizonte)
+
+        pronosticos = pronosticos[:horizonte] + [0.0] * (horizonte - len(pronosticos))
 
         res = list(df_fijos.iloc[i]) + [
-            real_ultimo, round(p_ultimo, 2), round(mape * 100, 2), "Prophet"
+            real_ultimo, round(pron_ultimo, 2), round(mape_elegido * 100, 2), mejor_modelo
         ] + [round(p, 2) for p in pronosticos]
         
         if usar_colaborado and colab_val is not None:
@@ -333,7 +271,7 @@ def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_cola
     return df_final, df_agg, fechas_dt, hist_totales, nombres_columnas_pron, usar_colaborado
 
 # =====================================================
-# 6. FUNCIONES DE VISUALIZACIÓN
+# 5. FUNCIONES DE VISUALIZACIÓN (igual que antes)
 # =====================================================
 
 def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt, 
@@ -452,7 +390,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # =====================================================
-# 7. INTERFAZ PRINCIPAL
+# 6. INTERFAZ PRINCIPAL
 # =====================================================
 
 if 'autenticado' not in st.session_state:
@@ -540,7 +478,7 @@ with st.sidebar.form("nuevo_proyecto_form"):
 if st.session_state.proyecto_actual:
     proyecto = st.session_state.proyecto_actual
     st.title(f"📊 Pronóstico - {st.session_state.proyecto_nombre}")
-    st.caption(f"Proyecto guardado en: {'GitHub' if GITHUB_TOKEN else 'Local'}")
+    st.caption(f"Proyecto guardado localmente")
     if st.button("◀️ Volver a proyectos"):
         st.session_state.proyecto_actual = None
         st.rerun()
@@ -559,5 +497,5 @@ else:
     4. Espera a que se complete el análisis
     5. Explora los resultados, aplica filtros y descarga los datos
     
-    Los proyectos se guardan automáticamente en GitHub y nunca se pierden.
+    Los proyectos se guardan automáticamente y puedes retomarlos en cualquier momento.
     """)
