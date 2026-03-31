@@ -43,7 +43,7 @@ st.markdown("""
         margin-bottom: 10px;
     }
     
-    /* Borde para recuadros de filtros */
+    /* Borde para recuadros de filtros - SIN bordes horizontales extra */
     .filtros-container {
         border: 1px solid #e0e0e0;
         border-radius: 10px;
@@ -56,6 +56,11 @@ st.markdown("""
         margin-bottom: 10px;
         color: #333;
         font-size: 16px;
+    }
+    
+    /* Eliminar bordes horizontales que puedan aparecer */
+    hr {
+        display: none;
     }
     
     /* Estilo para selectbox con selección múltiple */
@@ -393,7 +398,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO con leyenda arriba y espacio extra ---
+    # --- GRÁFICO con leyenda arriba ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -435,12 +440,13 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         )
     )
     
-    # Contenedor con borde y espacio extra después del gráfico
-    with st.container():
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown("<div style='margin-bottom: 60px;'></div>", unsafe_allow_html=True)  # Espacio extra
+    # Contenedor con borde para el gráfico (sin bordes horizontales extra)
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Espacio entre gráfico y tabla
+    st.markdown("<div style='margin-bottom: 50px;'></div>", unsafe_allow_html=True)
 
     # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
     col_titulo1, col_titulo2 = st.columns([3, 2])
