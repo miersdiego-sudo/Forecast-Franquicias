@@ -57,6 +57,13 @@ st.markdown("""
         color: #333;
         font-size: 16px;
     }
+    
+    /* Estilo para selectbox con selección múltiple */
+    .stMultiSelect [data-baseweb="select"] span {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -359,22 +366,9 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- FILTROS DE REAL CON BORDE ---
-    st.markdown('<div class="filtros-container">', unsafe_allow_html=True)
-    st.markdown('<h4>💰 Filtro por ventas reales</h4>', unsafe_allow_html=True)
+    # --- KPIs (con más espacio arriba) ---
+    st.markdown("<br>", unsafe_allow_html=True)
     
-    col_min, col_max = st.columns(2)
-    with col_min:
-        filtro_min = st.number_input("REAL mín.", value=0, step=1)
-    with col_max:
-        filtro_max = st.number_input("REAL máx.", value=100000, step=1000)
-    
-    # Aplicar filtro de REAL
-    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- KPIs ---
     total_real = int(df_agg['REAL_ULTIMO'].sum())
     total_pron = int(df_agg['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
@@ -401,7 +395,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO ---
+    # --- GRÁFICO con leyenda arriba ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -427,19 +421,40 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
                                  mode='lines', line=dict(color='#00CC96', width=1, dash='dot'),
                                  showlegend=False))
 
-    fig.update_layout(title="Histórico de ventas y proyección", xaxis_title="Fecha",
-                      yaxis_title="Ventas (unidades)", hovermode="x unified",
-                      xaxis=dict(tickformat="%d/%m/%Y", tickangle=45))
+    # Leyenda arriba en el medio
+    fig.update_layout(
+        title="Histórico de ventas y proyección",
+        title_x=0.5,
+        xaxis_title="Fecha",
+        yaxis_title="Ventas (unidades)",
+        hovermode="x unified",
+        xaxis=dict(tickformat="%d/%m/%Y", tickangle=45),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
+    )
     
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- TABLA DE PRODUCTOS ---
+    # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
+    st.markdown("<br>", unsafe_allow_html=True)
+    
     col_titulo1, col_titulo2 = st.columns([3, 2])
     with col_titulo1:
         st.subheader("📋 Detalle por producto (agregado)")
     with col_titulo2:
-        # Mostrar los valores del filtro aplicado
-        st.caption(f"Filtro REAL: {filtro_min} - {filtro_max}")
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+    
+    # Aplicar filtro de REAL a la tabla
+    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
 
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
