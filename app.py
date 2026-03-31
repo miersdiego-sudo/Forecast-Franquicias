@@ -17,7 +17,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Pronóstico IA - Amandau", layout="wide")
 
-# --- ESTILOS CSS PARA BORDES ---
+# --- ESTILOS CSS ---
 st.markdown("""
 <style>
     /* Bordes para KPIs */
@@ -43,7 +43,7 @@ st.markdown("""
         margin-bottom: 10px;
     }
     
-    /* Borde para recuadros de filtros - SIN bordes horizontales extra */
+    /* Borde para recuadros de filtros */
     .filtros-container {
         border: 1px solid #e0e0e0;
         border-radius: 10px;
@@ -58,16 +58,14 @@ st.markdown("""
         font-size: 16px;
     }
     
-    /* Eliminar bordes horizontales que puedan aparecer */
+    /* Eliminar bordes horizontales de streamlit */
     hr {
         display: none;
     }
     
-    /* Estilo para selectbox con selección múltiple */
-    .stMultiSelect [data-baseweb="select"] span {
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
+    /* Eliminar espacio extra que pueda generar líneas */
+    .stMarkdown hr {
+        display: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -398,7 +396,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO con leyenda arriba ---
+    # --- GRÁFICO con borde ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -440,13 +438,13 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         )
     )
     
-    # Contenedor con borde para el gráfico (sin bordes horizontales extra)
+    # Contenedor con borde para el gráfico
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
     # Espacio entre gráfico y tabla
-    st.markdown("<div style='margin-bottom: 50px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 40px;'></div>", unsafe_allow_html=True)
 
     # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
     col_titulo1, col_titulo2 = st.columns([3, 2])
