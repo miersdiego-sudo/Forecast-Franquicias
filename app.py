@@ -32,7 +32,7 @@ st.markdown("""
         font-weight: 500;
     }
     
-    /* Borde para el gráfico */
+     /* Borde para el gráfico */
     .stPlotlyChart {
         border: 1px solid #e0e0e0;
         border-radius: 10px;
@@ -40,7 +40,7 @@ st.markdown("""
         background-color: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         margin-top: 10px;
-        margin-bottom: 10px;
+        margin-bottom: 40px;  /* Aumentado para más espacio */
     }
     
     /* Borde para recuadros de filtros */
