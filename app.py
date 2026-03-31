@@ -58,14 +58,23 @@ st.markdown("""
         font-size: 16px;
     }
     
-    /* Eliminar bordes horizontales de streamlit */
-    hr {
-        display: none;
+    /* Eliminar TODOS los bordes horizontales */
+    hr,
+    .stMarkdown hr,
+    [data-testid="stHorizontalBlock"] hr,
+    .element-container:has(hr),
+    .stHorizontalBlock hr {
+        display: none !important;
     }
     
-    /* Eliminar espacio extra que pueda generar líneas */
-    .stMarkdown hr {
-        display: none;
+    /* Eliminar el borde que aparece después del título */
+    .stSubheader {
+        border-bottom: none !important;
+    }
+    
+    /* Eliminar líneas divisoras de Streamlit */
+    .stDivider {
+        display: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
