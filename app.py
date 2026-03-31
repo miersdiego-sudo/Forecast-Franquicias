@@ -32,15 +32,15 @@ st.markdown("""
         font-weight: 500;
     }
     
-     /* Borde para el gráfico */
-    .stPlotlyChart {
+    /* Borde para el contenedor del gráfico */
+    .chart-container {
         border: 1px solid #e0e0e0;
         border-radius: 10px;
         padding: 10px;
         background-color: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         margin-top: 10px;
-        margin-bottom: 100px;  /* Aumentado para más espacio */
+        margin-bottom: 10px;
     }
     
     /* Borde para recuadros de filtros */
@@ -366,9 +366,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- KPIs (con más espacio arriba) ---
-    st.markdown("<br>", unsafe_allow_html=True)
-    
+    # --- KPIs ---
     total_real = int(df_agg['REAL_ULTIMO'].sum())
     total_pron = int(df_agg['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
@@ -395,7 +393,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO con leyenda arriba ---
+    # --- GRÁFICO con leyenda arriba y espacio extra ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -421,7 +419,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
                                  mode='lines', line=dict(color='#00CC96', width=1, dash='dot'),
                                  showlegend=False))
 
-    # Leyenda arriba en el medio
     fig.update_layout(
         title="Histórico de ventas y proyección",
         title_x=0.5,
@@ -438,11 +435,14 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    # Contenedor con borde y espacio extra después del gráfico
+    with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 60px;'></div>", unsafe_allow_html=True)  # Espacio extra
 
     # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
-    st.markdown("<br>", unsafe_allow_html=True)
-    
     col_titulo1, col_titulo2 = st.columns([3, 2])
     with col_titulo1:
         st.subheader("📋 Detalle por producto (agregado)")
