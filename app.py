@@ -324,16 +324,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     if prod_sel:
         df_filt = df_filt[df_filt['DESCRIPCION'] == prod_sel]
 
-    # --- FILTRO REAL (aplicado aquí, afecta KPIs, gráfico y tabla) ---
-    col_min, col_max = st.columns(2)
-    with col_min:
-        filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
-    with col_max:
-        filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
-
-    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
-
-    # --- KPIs ---
+    # --- KPIs (calculados sobre datos filtrados por gerencia/familia/producto) ---
     total_real = int(df_filt['REAL_ULTIMO'].sum())
     total_pron = int(df_filt['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
@@ -406,9 +397,22 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- ESPACIO + TÍTULO DETALLE ---
+    # --- ESPACIO ---
     st.markdown("<br><br>", unsafe_allow_html=True)
-    st.subheader("📋 Detalle por producto (agregado)")
+
+    # --- TÍTULO DETALLE con filtro REAL al lado ---
+    col_titulo1, col_titulo2 = st.columns([3, 2])
+    with col_titulo1:
+        st.subheader("📋 Detalle por producto (agregado)")
+    with col_titulo2:
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+    
+    # Aplicar filtro REAL a la tabla
+    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
 
     # --- TABLA ---
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
