@@ -335,7 +335,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         with col_max:
             filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
     
-    # APLICAR TODOS LOS FILTROS (incluyendo REAL) al DataFrame final
+    # APLICAR FILTRO REAL - este será el DataFrame definitivo para todo
     df_filt = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
 
     # --- KPIs (calculados sobre datos ya filtrados) ---
