@@ -519,9 +519,10 @@ else:
             
             usar_colaborado_nuevo = st.checkbox("Incluir plan colaborado", value=False)
             
+            # Campo para columna del colaborado (aparece solo si el checkbox está marcado)
             col_colaborado_nuevo = None
             if usar_colaborado_nuevo:
-                col_colaborado_nuevo = st.text_input("Columna del colaborado (ej: CC)", value="CC").strip().upper()
+                col_colaborado_nuevo = st.text_input("Columna del colaborado (ej: CC)", value="CC", key="col_colaborado_input").strip().upper()
             
             submit_nuevo = st.form_submit_button("🚀 Crear y procesar proyecto")
             
