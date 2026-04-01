@@ -392,83 +392,120 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # ==================== GRÁFICO con ajuste completo ====================
+    # ==================== GRÁFICO REDISEÑADO ====================
     fecha_ultimo_real = fechas_dt[-1]
-    
-    # Crear fechas futuras SOLO para el horizonte de pronóstico
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
     
-    # Limitar fechas históricas para que no se extiendan demasiado
-    # Tomar solo los últimos 36 meses para mejor visualización
-    if len(fechas_dt) > 36:
-        fechas_hist = fechas_dt[-36:]
-        hist_vals = hist_totales[-36:] if hist_totales is not None else None
+    # Crear DataFrame con los valores históricos
+    if hist_totales is not None and len(hist_totales) == len(fechas_dt):
+        df_hist = pd.DataFrame({
+            'Fecha': fechas_dt,
+            'Venta Real': hist_totales.values
+        })
     else:
-        fechas_hist = fechas_dt
-        hist_vals = hist_totales
-
-    fig = go.Figure()
+        df_hist = pd.DataFrame({'Fecha': [], 'Venta Real': []})
     
-    # Gráfico histórico
-    if hist_vals is not None and len(hist_vals) == len(fechas_hist):
-        fig.add_trace(go.Scatter(x=fechas_hist, y=hist_vals,
-                                 mode='lines', name='Venta Real',
-                                 line=dict(color='#1f77b4', width=2)))
-
-    # Proyección
+    # Crear DataFrame con la proyección
     proyeccion = []
     for col in nombres_columnas_pron[:horizonte]:
         proyeccion.append(df_filt[col].sum() if col in df_filt.columns else 0)
-
-    fig.add_trace(go.Scatter(x=fechas_futuras, y=proyeccion,
-                             mode='lines+markers', name='Proyección',
-                             line=dict(color='#00CC96', width=2, dash='dash'),
-                             marker=dict(size=6)))
-
+    
+    df_proy = pd.DataFrame({
+        'Fecha': fechas_futuras,
+        'Proyección': proyeccion
+    })
+    
+    # Crear figura con diseño más limpio
+    fig = go.Figure()
+    
+    # Línea de Venta Real
+    if len(df_hist) > 0:
+        fig.add_trace(go.Scatter(
+            x=df_hist['Fecha'],
+            y=df_hist['Venta Real'],
+            mode='lines',
+            name='Venta Real',
+            line=dict(color='#2E86AB', width=2.5),
+            hovertemplate='<b>%{x|%b %Y}</b><br>Venta Real: %{y:,.0f}<extra></extra>'
+        ))
+    
+    # Línea de Proyección
+    if len(df_proy) > 0:
+        fig.add_trace(go.Scatter(
+            x=df_proy['Fecha'],
+            y=df_proy['Proyección'],
+            mode='lines+markers',
+            name='Proyección',
+            line=dict(color='#F18F01', width=2.5, dash='dash'),
+            marker=dict(size=6, color='#F18F01'),
+            hovertemplate='<b>%{x|%b %Y}</b><br>Proyección: %{y:,.0f}<extra></extra>'
+        ))
+    
     # Conectar último real con primer proyectado
-    if hist_vals is not None and len(hist_vals) > 0 and proyeccion:
-        ultimo_real = hist_vals.iloc[-1] if isinstance(hist_vals, pd.Series) else hist_vals[-1]
-        fig.add_trace(go.Scatter(x=[fechas_hist[-1], fechas_futuras[0]],
-                                 y=[ultimo_real, proyeccion[0]],
-                                 mode='lines', line=dict(color='#00CC96', width=1, dash='dot'),
-                                 showlegend=False))
-
+    if len(df_hist) > 0 and len(df_proy) > 0:
+        fig.add_trace(go.Scatter(
+            x=[df_hist['Fecha'].iloc[-1], df_proy['Fecha'].iloc[0]],
+            y=[df_hist['Venta Real'].iloc[-1], df_proy['Proyección'].iloc[0]],
+            mode='lines',
+            line=dict(color='#F18F01', width=1.5, dash='dot'),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+    
+    # Configuración del layout
     fig.update_layout(
-        title="Histórico de ventas y proyección",
-        title_x=0.5,
+        title={
+            'text': "Histórico de ventas y proyección",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 18, 'weight': 'bold'}
+        },
         xaxis_title="Fecha",
         yaxis_title="Ventas (unidades)",
         hovermode="x unified",
         height=450,
         autosize=True,
-        margin=dict(l=20, r=20, t=60, b=50),
+        margin=dict(l=40, r=40, t=70, b=50),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
         xaxis=dict(
             tickformat="%b %Y",
             tickangle=45,
             showgrid=True,
             gridwidth=1,
-            gridcolor='#e0e0e0',
-            rangeslider=dict(visible=False)
+            gridcolor='#e6e6e6',
+            showline=True,
+            linewidth=1,
+            linecolor='#cccccc'
         ),
         yaxis=dict(
             showgrid=True,
             gridwidth=1,
-            gridcolor='#e0e0e0'
+            gridcolor='#e6e6e6',
+            showline=True,
+            linewidth=1,
+            linecolor='#cccccc',
+            tickformat=",.0f"
         ),
         legend=dict(
             orientation="h",
             yanchor="bottom",
             y=1.02,
             xanchor="center",
-            x=0.5
+            x=0.5,
+            font=dict(size=12)
+        ),
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=12,
+            font_family="Arial"
         )
     )
     
-    # Usar use_container_width=True para que ocupe todo el ancho
     st.plotly_chart(fig, use_container_width=True)
 
     # ==================== TABLA con espacio extra ====================
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("📋 Detalle por producto (agregado)")
     
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
