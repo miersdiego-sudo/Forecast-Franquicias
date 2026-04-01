@@ -35,13 +35,6 @@ st.markdown("""
         background-color: #fafafa;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    .proyecto-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 0;
-        border-bottom: 1px solid #e0e0e0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -321,11 +314,9 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     nombre_ultimo = ultimo_mes.strftime('%b %Y')
     nombre_siguiente = siguiente_mes.strftime('%b %Y')
 
-    # Mostrar información del colaborado si está activo
     if usar_colaborado and col_colaborado:
         st.info(f"📊 Plan colaborado activo - Columna: {col_colaborado}")
 
-    # ==================== FILA 1: FILTROS DE PRODUCTO ====================
     st.subheader("🔍 Filtros de productos")
     col_f1, col_f2, col_f3 = st.columns(3)
     
@@ -348,7 +339,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         prod_sel = st.selectbox("Producto (búsqueda)", options=[""] + productos, index=0,
                                 format_func=lambda x: "🔍 Buscar..." if x == "" else x)
     
-    # Aplicar filtros de producto
     if gerencias_sel:
         df_temp = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
     else:
@@ -358,7 +348,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     if prod_sel:
         df_temp = df_temp[df_temp['DESCRIPCION'] == prod_sel]
 
-    # ==================== FILA 2: TÍTULO + FILTRO REAL ====================
     col_titulo, col_filtro = st.columns([3, 2])
     with col_titulo:
         st.subheader("📊 Resultado Global")
@@ -369,10 +358,8 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         with col_max:
             filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max")
     
-    # Aplicar filtro REAL
     df_filt = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
 
-    # ==================== KPIs ====================
     total_real = int(df_filt['REAL_ULTIMO'].sum())
     total_pron = int(df_filt['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
@@ -397,7 +384,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # ==================== GRÁFICO ====================
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -437,7 +423,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     
     st.plotly_chart(fig, use_container_width=True)
 
-    # ==================== TABLA ====================
     st.subheader("📋 Detalle por producto (agregado)")
     
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
@@ -448,7 +433,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     columnas_tabla = columnas_fijas + columnas_pron
     st.dataframe(df_filt[columnas_tabla], use_container_width=True)
 
-    # --- DESCARGA EXCEL ---
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_final.to_excel(writer, sheet_name='Pronósticos (líneas)', index=False)
@@ -495,14 +479,11 @@ if st.sidebar.button("🚪 Cerrar sesión"):
     st.session_state.proyecto_actual = None
     st.rerun()
 
-# ==================== PESTAÑAS ====================
 tab1, tab2 = st.tabs(["📁 Gestión de Proyectos", "📊 Análisis"])
 
-# ==================== PESTAÑA 1: GESTIÓN DE PROYECTOS ====================
 with tab1:
     st.header("Gestión de Proyectos")
     
-    # Crear nuevo proyecto
     with st.expander("➕ Crear nuevo proyecto", expanded=True):
         with st.form("nuevo_proyecto_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
@@ -543,39 +524,16 @@ with tab1:
                         except Exception as e:
                             st.error(f"Error: {e}")
     
-    # Lista de proyectos existentes en formato compacto
     st.subheader("📂 Proyectos guardados")
     proyectos = listar_proyectos()
     
     if proyectos:
-        # Crear una tabla con columnas
-        cols = st.columns([4, 1, 1, 1, 1])
-        with cols[0]:
-            st.markdown("**Nombre del proyecto**")
-        with cols[1]:
-            st.markdown("**Horizonte**")
-        with cols[2]:
-            st.markdown("**Colaborado**")
-        with cols[3]:
-            st.markdown("**Acciones**")
-        with cols[4]:
-            st.markdown("**Eliminar**")
-        
-        st.divider()
-        
         for p in proyectos:
-            cols = st.columns([4, 1, 1, 1, 1])
-            with cols[0]:
-                st.write(p['nombre'])
-            with cols[1]:
-                st.write(f"{p['horizonte']} meses")
-            with cols[2]:
-                if p.get('usar_colaborado', False):
-                    st.write(f"✓ ({p.get('col_colaborado', '?')})")
-                else:
-                    st.write("—")
-            with cols[3]:
-                # Botón cargar
+            col1, col2, col3, col4 = st.columns([4, 1, 1, 2])
+            with col1:
+                st.write(f"**{p['nombre']}**")
+                st.caption(f"Creado: {p['fecha_creacion']} | {p['horizonte']} meses")
+            with col2:
                 if st.button("📂 Cargar", key=f"load_{p['nombre']}"):
                     proyecto = cargar_proyecto(p['nombre'])
                     if proyecto:
@@ -583,31 +541,28 @@ with tab1:
                         st.session_state.proyecto_nombre = p['nombre']
                         st.success(f"Proyecto '{p['nombre']}' cargado")
                         st.rerun()
-                
-                # Renombrar en línea (usando un text_input pequeño)
+            with col3:
+                if st.button("🗑️ Eliminar", key=f"del_{p['nombre']}"):
+                    eliminar_proyecto(p['nombre'])
+                    st.success(f"Proyecto '{p['nombre']}' eliminado")
+                    st.rerun()
+            with col4:
                 nuevo_nombre = st.text_input("", value=p['nombre'], key=f"rename_{p['nombre']}", 
                                              placeholder="Nuevo nombre", label_visibility="collapsed")
                 if nuevo_nombre and nuevo_nombre != p['nombre']:
                     if renombrar_proyecto(p['nombre'], nuevo_nombre):
                         st.success(f"Renombrado a '{nuevo_nombre}'")
                         st.rerun()
-            with cols[4]:
-                if st.button("🗑️ Eliminar", key=f"del_{p['nombre']}"):
-                    eliminar_proyecto(p['nombre'])
-                    st.success(f"Proyecto '{p['nombre']}' eliminado")
-                    st.rerun()
             st.divider()
     else:
         st.info("No hay proyectos guardados. Crea uno nuevo usando el formulario de arriba.")
 
-# ==================== PESTAÑA 2: ANÁLISIS ====================
 with tab2:
     if st.session_state.proyecto_actual:
         proyecto = st.session_state.proyecto_actual
         st.title(f"📊 Pronóstico - {st.session_state.proyecto_nombre}")
         st.caption(f"Proyecto guardado localmente")
         
-        # Botón para volver a proyectos
         if st.button("◀️ Volver a gestión de proyectos"):
             st.session_state.proyecto_actual = None
             st.rerun()
