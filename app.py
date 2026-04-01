@@ -35,6 +35,13 @@ st.markdown("""
         background-color: #fafafa;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
+    .proyecto-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -91,7 +98,9 @@ def listar_proyectos():
                 proyectos.append({
                     'nombre': nombre,
                     'fecha_creacion': datos.get('fecha_creacion', 'Desconocida'),
-                    'horizonte': datos.get('horizonte', 12)
+                    'horizonte': datos.get('horizonte', 12),
+                    'usar_colaborado': datos.get('usar_colaborado', False),
+                    'col_colaborado': datos.get('col_colaborado', None)
                 })
     return sorted(proyectos, key=lambda x: x['fecha_creacion'], reverse=True)
 
@@ -105,6 +114,8 @@ def eliminar_proyecto(nombre_proyecto):
 def renombrar_proyecto(nombre_antiguo, nombre_nuevo):
     if nombre_antiguo == nombre_nuevo:
         return True
+    if not nombre_nuevo:
+        return False
     proyecto_path_antiguo = os.path.join(PROYECTOS_DIR, f"{nombre_antiguo}.pkl")
     proyecto_path_nuevo = os.path.join(PROYECTOS_DIR, f"{nombre_nuevo}.pkl")
     if os.path.exists(proyecto_path_antiguo) and not os.path.exists(proyecto_path_nuevo):
@@ -303,12 +314,16 @@ def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_cola
 # =====================================================
 
 def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt, 
-                       hist_totales, nombres_columnas_pron):
+                       hist_totales, nombres_columnas_pron, col_colaborado=None):
     
     ultimo_mes = fechas_dt[-1]
     siguiente_mes = ultimo_mes + pd.DateOffset(months=1)
     nombre_ultimo = ultimo_mes.strftime('%b %Y')
     nombre_siguiente = siguiente_mes.strftime('%b %Y')
+
+    # Mostrar información del colaborado si está activo
+    if usar_colaborado and col_colaborado:
+        st.info(f"📊 Plan colaborado activo - Columna: {col_colaborado}")
 
     # ==================== FILA 1: FILTROS DE PRODUCTO ====================
     st.subheader("🔍 Filtros de productos")
@@ -490,10 +505,14 @@ with tab1:
     # Crear nuevo proyecto
     with st.expander("➕ Crear nuevo proyecto", expanded=True):
         with st.form("nuevo_proyecto_form", clear_on_submit=True):
-            nombre_nuevo = st.text_input("Nombre del proyecto (ej: Febrero 2026)")
-            archivo_subido = st.file_uploader("Subir archivo Excel", type=["xlsx", "xls"], key="nuevo_proyecto")
-            rango_ventas_nuevo = st.text_input("Rango de columnas de ventas", value="I:BF")
-            horizonte_nuevo = st.slider("Horizonte de pronóstico (meses)", 1, 12, 12)
+            col1, col2 = st.columns(2)
+            with col1:
+                nombre_nuevo = st.text_input("Nombre del proyecto (ej: Febrero 2026)")
+                archivo_subido = st.file_uploader("Subir archivo Excel", type=["xlsx", "xls"], key="nuevo_proyecto")
+            with col2:
+                rango_ventas_nuevo = st.text_input("Rango de columnas de ventas", value="I:BF")
+                horizonte_nuevo = st.slider("Horizonte de pronóstico (meses)", 1, 12, 12)
+            
             usar_colaborado_nuevo = st.checkbox("Incluir plan colaborado", value=False)
             
             col_colaborado_nuevo = None
@@ -524,17 +543,39 @@ with tab1:
                         except Exception as e:
                             st.error(f"Error: {e}")
     
-    # Lista de proyectos existentes
+    # Lista de proyectos existentes en formato compacto
     st.subheader("📂 Proyectos guardados")
     proyectos = listar_proyectos()
     
     if proyectos:
+        # Crear una tabla con columnas
+        cols = st.columns([4, 1, 1, 1, 1])
+        with cols[0]:
+            st.markdown("**Nombre del proyecto**")
+        with cols[1]:
+            st.markdown("**Horizonte**")
+        with cols[2]:
+            st.markdown("**Colaborado**")
+        with cols[3]:
+            st.markdown("**Acciones**")
+        with cols[4]:
+            st.markdown("**Eliminar**")
+        
+        st.divider()
+        
         for p in proyectos:
-            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-            with col1:
-                st.write(f"**{p['nombre']}**")
-                st.caption(f"Creado: {p['fecha_creacion']} | Horizonte: {p['horizonte']} meses")
-            with col2:
+            cols = st.columns([4, 1, 1, 1, 1])
+            with cols[0]:
+                st.write(p['nombre'])
+            with cols[1]:
+                st.write(f"{p['horizonte']} meses")
+            with cols[2]:
+                if p.get('usar_colaborado', False):
+                    st.write(f"✓ ({p.get('col_colaborado', '?')})")
+                else:
+                    st.write("—")
+            with cols[3]:
+                # Botón cargar
                 if st.button("📂 Cargar", key=f"load_{p['nombre']}"):
                     proyecto = cargar_proyecto(p['nombre'])
                     if proyecto:
@@ -542,17 +583,15 @@ with tab1:
                         st.session_state.proyecto_nombre = p['nombre']
                         st.success(f"Proyecto '{p['nombre']}' cargado")
                         st.rerun()
-            with col3:
-                # Renombrar con diálogo
-                nuevo_nombre = st.text_input("Nuevo nombre", value=p['nombre'], key=f"rename_input_{p['nombre']}", label_visibility="collapsed")
-                if st.button("✏️ Renombrar", key=f"rename_{p['nombre']}"):
-                    if nuevo_nombre and nuevo_nombre != p['nombre']:
-                        if renombrar_proyecto(p['nombre'], nuevo_nombre):
-                            st.success(f"Renombrado a '{nuevo_nombre}'")
-                            st.rerun()
-                        else:
-                            st.error("Error al renombrar")
-            with col4:
+                
+                # Renombrar en línea (usando un text_input pequeño)
+                nuevo_nombre = st.text_input("", value=p['nombre'], key=f"rename_{p['nombre']}", 
+                                             placeholder="Nuevo nombre", label_visibility="collapsed")
+                if nuevo_nombre and nuevo_nombre != p['nombre']:
+                    if renombrar_proyecto(p['nombre'], nuevo_nombre):
+                        st.success(f"Renombrado a '{nuevo_nombre}'")
+                        st.rerun()
+            with cols[4]:
                 if st.button("🗑️ Eliminar", key=f"del_{p['nombre']}"):
                     eliminar_proyecto(p['nombre'])
                     st.success(f"Proyecto '{p['nombre']}' eliminado")
@@ -577,6 +616,6 @@ with tab2:
         
         mostrar_resultados(proyecto['df_final'], proyecto['df_agg'], proyecto['usar_colaborado'],
                           proyecto['horizonte'], proyecto['fechas_dt'], proyecto['hist_totales'],
-                          proyecto['nombres_columnas_pron'])
+                          proyecto['nombres_columnas_pron'], proyecto.get('col_colaborado', None))
     else:
         st.info("📁 No hay un proyecto cargado. Ve a la pestaña 'Gestión de Proyectos' para crear o cargar un proyecto.")
