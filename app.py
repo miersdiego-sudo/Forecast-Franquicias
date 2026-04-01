@@ -508,6 +508,13 @@ else:
     st.header("📁 Gestión de Proyectos")
     
     with st.expander("➕ Crear nuevo proyecto", expanded=True):
+        # Usar callbacks para actualizar la visibilidad del campo
+        usar_colaborado_nuevo = st.checkbox("Incluir plan colaborado", value=False, key="colaborado_checkbox")
+        
+        col_colaborado_nuevo = None
+        if usar_colaborado_nuevo:
+            col_colaborado_nuevo = st.text_input("Columna del colaborado (ej: CC)", value="CC", key="col_colaborado_input").strip().upper()
+        
         with st.form("nuevo_proyecto_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -516,13 +523,6 @@ else:
             with col2:
                 rango_ventas_nuevo = st.text_input("Rango de columnas de ventas", value="I:BF")
                 horizonte_nuevo = st.slider("Horizonte de pronóstico (meses)", 1, 12, 12)
-            
-            usar_colaborado_nuevo = st.checkbox("Incluir plan colaborado", value=False)
-            
-            # Campo para columna del colaborado (aparece solo si el checkbox está marcado)
-            col_colaborado_nuevo = None
-            if usar_colaborado_nuevo:
-                col_colaborado_nuevo = st.text_input("Columna del colaborado (ej: CC)", value="CC", key="col_colaborado_input").strip().upper()
             
             submit_nuevo = st.form_submit_button("🚀 Crear y procesar proyecto")
             
