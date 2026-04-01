@@ -17,10 +17,8 @@ from datetime import datetime
 
 st.set_page_config(page_title="Pronóstico IA - Amandau", layout="wide")
 
-# --- ESTILOS CSS PARA BORDE DEL GRÁFICO Y ESPACIOS ---
 st.markdown("""
 <style>
-    /* Borde para el gráfico */
     .stPlotlyChart {
         border: 1px solid #e0e0e0;
         border-radius: 10px;
@@ -30,20 +28,16 @@ st.markdown("""
         margin-top: 10px;
         margin-bottom: 40px;
     }
-    
-    /* Espacio entre secciones */
     .section-spacing {
         margin-bottom: 30px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Directorio de proyectos
 PROYECTOS_DIR = "proyectos"
 if not os.path.exists(PROYECTOS_DIR):
     os.makedirs(PROYECTOS_DIR)
 
-# Usuarios autorizados
 USUARIOS = {
     "amandau": "amandau_2026",
     "analista": "pronostico2024"
@@ -218,9 +212,7 @@ def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_cola
         else:
             colab_val = None
 
-        # Prophet
         p_ultimo_prophet = fit_prophet(serie_hasta_anteultimo, 1)[0]
-        # Chronos
         p_ultimo_chronos = fit_chronos(serie_hasta_anteultimo, 1)[0]
 
         mape_p = mean_absolute_percentage_error([real_ultimo + 1], [p_ultimo_prophet + 1])
@@ -312,7 +304,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         gerencias = sorted(df_agg['GERENCIA'].unique())
         gerencias_sel = st.multiselect("Gerencia", gerencias, default=gerencias)
     
-    # Filtrar por gerencia seleccionada
     if gerencias_sel:
         df_filt = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
     else:
@@ -322,7 +313,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         familias = sorted(df_filt['ARTICULO_FAMILIA'].unique())
         familias_sel = st.multiselect("Familia", familias, default=familias)
     
-    # Filtrar por familia seleccionada
     if familias_sel:
         df_filt = df_filt[df_filt['ARTICULO_FAMILIA'].isin(familias_sel)]
     
@@ -334,22 +324,16 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     if prod_sel:
         df_filt = df_filt[df_filt['DESCRIPCION'] == prod_sel]
 
-    # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
-    # Primero definimos el filtro REAL para poder aplicarlo a los KPIs también
-    col_titulo1, col_titulo2 = st.columns([3, 2])
-    with col_titulo1:
-        st.subheader("📋 Detalle por producto (agregado)")
-    with col_titulo2:
-        col_min, col_max = st.columns(2)
-        with col_min:
-            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
-        with col_max:
-            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
-    
-    # Aplicar filtro de REAL a los datos (para KPIs y tabla)
+    # --- FILTRO REAL (aplicado aquí, afecta KPIs, gráfico y tabla) ---
+    col_min, col_max = st.columns(2)
+    with col_min:
+        filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
+    with col_max:
+        filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+
     df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
 
-    # --- KPIs (calculados sobre los datos FILTRADOS) ---
+    # --- KPIs ---
     total_real = int(df_filt['REAL_ULTIMO'].sum())
     total_pron = int(df_filt['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
@@ -376,7 +360,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO con borde ---
+    # --- GRÁFICO ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -408,6 +392,8 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         xaxis_title="Fecha",
         yaxis_title="Ventas (unidades)",
         hovermode="x unified",
+        height=420,
+        margin=dict(l=60, r=20, t=60, b=80),
         xaxis=dict(tickformat="%d/%m/%Y", tickangle=45),
         legend=dict(
             orientation="h",
@@ -418,13 +404,13 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         )
     )
     
-    # El borde se aplica automáticamente por CSS a .stPlotlyChart con margin-bottom: 40px
     st.plotly_chart(fig, use_container_width=True)
-    
-    # Espacio adicional entre gráfico y tabla
-    st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- TABLA DE PRODUCTOS (mostrar los datos ya filtrados) ---
+    # --- ESPACIO + TÍTULO DETALLE ---
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.subheader("📋 Detalle por producto (agregado)")
+
+    # --- TABLA ---
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
     columnas_pron = nombres_columnas_pron[:min(horizonte, 6)]
