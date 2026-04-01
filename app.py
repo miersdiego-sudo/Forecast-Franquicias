@@ -35,10 +35,6 @@ st.markdown("""
         background-color: #fafafa;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    div[data-testid="column"] input {
-        font-size: 14px;
-        padding: 4px 8px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -307,7 +303,7 @@ def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_cola
 # =====================================================
 
 def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt, 
-                       hist_totales, nombres_columnas_pron, col_colaborado=None):
+                       hist_totales, nombres_columnas_pron):
     
     ultimo_mes = fechas_dt[-1]
     siguiente_mes = ultimo_mes + pd.DateOffset(months=1)
@@ -347,7 +343,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     if prod_sel:
         df_temp = df_temp[df_temp['DESCRIPCION'] == prod_sel]
 
-    # ==================== FILA 2: TÍTULO + FILTRO REAL (para KPIs y tabla) ====================
+    # ==================== FILA 2: TÍTULO + FILTRO REAL ====================
     col_titulo, col_filtro = st.columns([3, 2])
     with col_titulo:
         st.subheader("📊 Resultado Global")
@@ -358,7 +354,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         with col_max:
             filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max")
     
-    # Aplicar filtro REAL a los datos (para KPIs y tabla)
+    # Aplicar filtro REAL
     df_filt = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
 
     # ==================== KPIs ====================
@@ -484,94 +480,103 @@ if st.sidebar.button("🚪 Cerrar sesión"):
     st.session_state.proyecto_actual = None
     st.rerun()
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📁 Gestión de Proyectos")
+# ==================== PESTAÑAS ====================
+tab1, tab2 = st.tabs(["📁 Gestión de Proyectos", "📊 Análisis"])
 
-proyectos = listar_proyectos()
-if proyectos:
-    st.sidebar.markdown("### Proyectos guardados")
-    for p in proyectos:
-        col1, col2 = st.sidebar.columns([3, 1])
-        with col1:
-            if st.button(f"📂 {p['nombre']}", key=f"load_{p['nombre']}"):
-                proyecto = cargar_proyecto(p['nombre'])
-                if proyecto:
-                    st.session_state.proyecto_actual = proyecto
-                    st.session_state.proyecto_nombre = p['nombre']
-                    st.rerun()
-        with col2:
-            if st.button("✏️", key=f"rename_{p['nombre']}"):
-                nuevo_nombre = st.text_input("Nuevo nombre", value=p['nombre'], key=f"rename_input_{p['nombre']}")
-                if st.button("Guardar", key=f"save_rename_{p['nombre']}"):
-                    if renombrar_proyecto(p['nombre'], nuevo_nombre):
-                        st.success(f"Proyecto renombrado a '{nuevo_nombre}'")
-                        st.rerun()
-                    else:
-                        st.error("Error al renombrar")
-            if st.button("🗑️", key=f"del_{p['nombre']}"):
-                eliminar_proyecto(p['nombre'])
-                st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Crear nuevo proyecto")
-
-# Usar un formulario que se limpie automáticamente después de enviar
-with st.sidebar.form("nuevo_proyecto_form", clear_on_submit=True):
-    nombre_nuevo = st.text_input("Nombre del proyecto (ej: Febrero 2026)")
-    archivo_subido = st.file_uploader("Subir archivo Excel", type=["xlsx", "xls"], key="nuevo_proyecto")
-    rango_ventas_nuevo = st.text_input("Rango de columnas de ventas", value="I:BF")
-    horizonte_nuevo = st.slider("Horizonte de pronóstico (meses)", 1, 12, 12)
-    usar_colaborado_nuevo = st.checkbox("Incluir plan colaborado", value=False)
+# ==================== PESTAÑA 1: GESTIÓN DE PROYECTOS ====================
+with tab1:
+    st.header("Gestión de Proyectos")
     
-    col_colaborado_nuevo = None
-    if usar_colaborado_nuevo:
-        col_colaborado_nuevo = st.text_input("Columna del colaborado (ej: CC)", value="CC").strip().upper()
+    # Crear nuevo proyecto
+    with st.expander("➕ Crear nuevo proyecto", expanded=True):
+        with st.form("nuevo_proyecto_form", clear_on_submit=True):
+            nombre_nuevo = st.text_input("Nombre del proyecto (ej: Febrero 2026)")
+            archivo_subido = st.file_uploader("Subir archivo Excel", type=["xlsx", "xls"], key="nuevo_proyecto")
+            rango_ventas_nuevo = st.text_input("Rango de columnas de ventas", value="I:BF")
+            horizonte_nuevo = st.slider("Horizonte de pronóstico (meses)", 1, 12, 12)
+            usar_colaborado_nuevo = st.checkbox("Incluir plan colaborado", value=False)
+            
+            col_colaborado_nuevo = None
+            if usar_colaborado_nuevo:
+                col_colaborado_nuevo = st.text_input("Columna del colaborado (ej: CC)", value="CC").strip().upper()
+            
+            submit_nuevo = st.form_submit_button("🚀 Crear y procesar proyecto")
+            
+            if submit_nuevo:
+                if not nombre_nuevo:
+                    st.error("Ingrese un nombre")
+                elif not archivo_subido:
+                    st.error("Suba un archivo Excel")
+                else:
+                    with st.spinner("Procesando... esto puede tomar varios minutos"):
+                        try:
+                            df_final, df_agg, fechas_dt, hist_totales, nombres_cols, uc = procesar_archivo(
+                                archivo_subido, rango_ventas_nuevo, horizonte_nuevo,
+                                usar_colaborado_nuevo, col_colaborado_nuevo)
+                            guardar_proyecto(nombre_nuevo, df_final, df_agg, fechas_dt, uc,
+                                            horizonte_nuevo, nombres_cols, rango_ventas_nuevo, hist_totales, col_colaborado_nuevo)
+                            st.success(f"Proyecto '{nombre_nuevo}' creado exitosamente")
+                            proyecto = cargar_proyecto(nombre_nuevo)
+                            if proyecto:
+                                st.session_state.proyecto_actual = proyecto
+                                st.session_state.proyecto_nombre = nombre_nuevo
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
     
-    submit_nuevo = st.form_submit_button("🚀 Crear y procesar proyecto")
+    # Lista de proyectos existentes
+    st.subheader("📂 Proyectos guardados")
+    proyectos = listar_proyectos()
     
-    if submit_nuevo:
-        if not nombre_nuevo:
-            st.error("Ingrese un nombre")
-        elif not archivo_subido:
-            st.error("Suba un archivo Excel")
-        else:
-            with st.spinner("Procesando... esto puede tomar varios minutos"):
-                try:
-                    df_final, df_agg, fechas_dt, hist_totales, nombres_cols, uc = procesar_archivo(
-                        archivo_subido, rango_ventas_nuevo, horizonte_nuevo,
-                        usar_colaborado_nuevo, col_colaborado_nuevo)
-                    guardar_proyecto(nombre_nuevo, df_final, df_agg, fechas_dt, uc,
-                                    horizonte_nuevo, nombres_cols, rango_ventas_nuevo, hist_totales, col_colaborado_nuevo)
-                    st.success(f"Proyecto '{nombre_nuevo}' creado exitosamente")
-                    proyecto = cargar_proyecto(nombre_nuevo)
+    if proyectos:
+        for p in proyectos:
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+            with col1:
+                st.write(f"**{p['nombre']}**")
+                st.caption(f"Creado: {p['fecha_creacion']} | Horizonte: {p['horizonte']} meses")
+            with col2:
+                if st.button("📂 Cargar", key=f"load_{p['nombre']}"):
+                    proyecto = cargar_proyecto(p['nombre'])
                     if proyecto:
                         st.session_state.proyecto_actual = proyecto
-                        st.session_state.proyecto_nombre = nombre_nuevo
+                        st.session_state.proyecto_nombre = p['nombre']
+                        st.success(f"Proyecto '{p['nombre']}' cargado")
                         st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {e}")
+            with col3:
+                # Renombrar con diálogo
+                nuevo_nombre = st.text_input("Nuevo nombre", value=p['nombre'], key=f"rename_input_{p['nombre']}", label_visibility="collapsed")
+                if st.button("✏️ Renombrar", key=f"rename_{p['nombre']}"):
+                    if nuevo_nombre and nuevo_nombre != p['nombre']:
+                        if renombrar_proyecto(p['nombre'], nuevo_nombre):
+                            st.success(f"Renombrado a '{nuevo_nombre}'")
+                            st.rerun()
+                        else:
+                            st.error("Error al renombrar")
+            with col4:
+                if st.button("🗑️ Eliminar", key=f"del_{p['nombre']}"):
+                    eliminar_proyecto(p['nombre'])
+                    st.success(f"Proyecto '{p['nombre']}' eliminado")
+                    st.rerun()
+            st.divider()
+    else:
+        st.info("No hay proyectos guardados. Crea uno nuevo usando el formulario de arriba.")
 
-if st.session_state.proyecto_actual:
-    proyecto = st.session_state.proyecto_actual
-    st.title(f"📊 Pronóstico - {st.session_state.proyecto_nombre}")
-    st.caption(f"Proyecto guardado localmente")
-    if st.button("◀️ Volver a proyectos"):
-        st.session_state.proyecto_actual = None
-        st.rerun()
-    mostrar_resultados(proyecto['df_final'], proyecto['df_agg'], proyecto['usar_colaborado'],
-                      proyecto['horizonte'], proyecto['fechas_dt'], proyecto['hist_totales'],
-                      proyecto['nombres_columnas_pron'], proyecto.get('col_colaborado', None))
-else:
-    st.title("🏛️ Sistema de Pronóstico de Demanda")
-    st.markdown("""
-    ### Bienvenido al sistema
-    
-    Para comenzar:
-    1. En el panel izquierdo, crea un nuevo proyecto o carga uno existente
-    2. Sube un archivo Excel con el formato estándar
-    3. Configura los parámetros de pronóstico
-    4. Espera a que se complete el análisis
-    5. Explora los resultados, aplica filtros y descarga los datos
-    
-    Los proyectos se guardan automáticamente y puedes retomarlos en cualquier momento.
-    """)
+# ==================== PESTAÑA 2: ANÁLISIS ====================
+with tab2:
+    if st.session_state.proyecto_actual:
+        proyecto = st.session_state.proyecto_actual
+        st.title(f"📊 Pronóstico - {st.session_state.proyecto_nombre}")
+        st.caption(f"Proyecto guardado localmente")
+        
+        # Botón para volver a proyectos
+        if st.button("◀️ Volver a gestión de proyectos"):
+            st.session_state.proyecto_actual = None
+            st.rerun()
+        
+        st.markdown("---")
+        
+        mostrar_resultados(proyecto['df_final'], proyecto['df_agg'], proyecto['usar_colaborado'],
+                          proyecto['horizonte'], proyecto['fechas_dt'], proyecto['hist_totales'],
+                          proyecto['nombres_columnas_pron'])
+    else:
+        st.info("📁 No hay un proyecto cargado. Ve a la pestaña 'Gestión de Proyectos' para crear o cargar un proyecto.")
