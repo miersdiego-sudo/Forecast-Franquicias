@@ -35,6 +35,10 @@ st.markdown("""
         background-color: #fafafa;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
+    div[data-testid="column"] input {
+        font-size: 14px;
+        padding: 4px 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,7 +59,7 @@ def verificar_login(usuario, password):
     return usuario in USUARIOS and USUARIOS[usuario] == password
 
 def guardar_proyecto(nombre_proyecto, df_final, df_agg, fechas_dt, usar_colaborado, 
-                     horizonte, nombres_columnas_pron, rango_ventas, hist_totales):
+                     horizonte, nombres_columnas_pron, rango_ventas, hist_totales, col_colaborado):
     proyecto_path = os.path.join(PROYECTOS_DIR, f"{nombre_proyecto}.pkl")
     datos = {
         'nombre': nombre_proyecto,
@@ -67,6 +71,7 @@ def guardar_proyecto(nombre_proyecto, df_final, df_agg, fechas_dt, usar_colabora
         'nombres_columnas_pron': nombres_columnas_pron,
         'rango_ventas': rango_ventas,
         'hist_totales': hist_totales,
+        'col_colaborado': col_colaborado,
         'fecha_creacion': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
     with open(proyecto_path, 'wb') as f:
@@ -98,6 +103,16 @@ def eliminar_proyecto(nombre_proyecto):
     proyecto_path = os.path.join(PROYECTOS_DIR, f"{nombre_proyecto}.pkl")
     if os.path.exists(proyecto_path):
         os.remove(proyecto_path)
+        return True
+    return False
+
+def renombrar_proyecto(nombre_antiguo, nombre_nuevo):
+    if nombre_antiguo == nombre_nuevo:
+        return True
+    proyecto_path_antiguo = os.path.join(PROYECTOS_DIR, f"{nombre_antiguo}.pkl")
+    proyecto_path_nuevo = os.path.join(PROYECTOS_DIR, f"{nombre_nuevo}.pkl")
+    if os.path.exists(proyecto_path_antiguo) and not os.path.exists(proyecto_path_nuevo):
+        os.rename(proyecto_path_antiguo, proyecto_path_nuevo)
         return True
     return False
 
@@ -180,7 +195,7 @@ def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_cola
                               usecols=rango_ventas, skiprows=3)
     df_ventas = df_ventas.apply(pd.to_numeric, errors='coerce').fillna(0)
 
-    if usar_colaborado:
+    if usar_colaborado and col_colaborado:
         try:
             df_colab = pd.read_excel(archivo, sheet_name="Base", header=None,
                                      usecols=col_colaborado, skiprows=3)
@@ -292,7 +307,7 @@ def procesar_archivo(archivo, rango_ventas, horizonte, usar_colaborado, col_cola
 # =====================================================
 
 def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt, 
-                       hist_totales, nombres_columnas_pron):
+                       hist_totales, nombres_columnas_pron, col_colaborado=None):
     
     ultimo_mes = fechas_dt[-1]
     siguiente_mes = ultimo_mes + pd.DateOffset(months=1)
@@ -332,23 +347,30 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     if prod_sel:
         df_temp = df_temp[df_temp['DESCRIPCION'] == prod_sel]
 
-    # ==================== FILA 2: KPIs ====================
-    # Aplicar filtro REAL para KPIs (valores por defecto amplios para mostrar todo)
-    filtro_min_kpi = 0
-    filtro_max_kpi = 99999999
-    df_kpi = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min_kpi) & (df_temp['REAL_ULTIMO'] <= filtro_max_kpi)]
+    # ==================== FILA 2: TÍTULO + FILTRO REAL (para KPIs y tabla) ====================
+    col_titulo, col_filtro = st.columns([3, 2])
+    with col_titulo:
+        st.subheader("📊 Resultado Global")
+    with col_filtro:
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max")
     
-    total_real = int(df_kpi['REAL_ULTIMO'].sum())
-    total_pron = int(df_kpi['PRON_ULTIMO'].sum())
-    primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
-    total_pron_marzo = int(df_kpi[primer_mes_futuro].sum()) if primer_mes_futuro in df_kpi.columns else 0
-    mape_promedio = round(df_kpi['MAPE_%'].mean(), 1) if len(df_kpi) > 0 else 0.0
+    # Aplicar filtro REAL a los datos (para KPIs y tabla)
+    df_filt = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
 
-    st.subheader("📊 Resultado Global")
+    # ==================== KPIs ====================
+    total_real = int(df_filt['REAL_ULTIMO'].sum())
+    total_pron = int(df_filt['PRON_ULTIMO'].sum())
+    primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
+    total_pron_marzo = int(df_filt[primer_mes_futuro].sum()) if primer_mes_futuro in df_filt.columns else 0
+    mape_promedio = round(df_filt['MAPE_%'].mean(), 1) if len(df_filt) > 0 else 0.0
     
     if usar_colaborado:
-        total_colab = int(df_kpi['COLABORADO_ULTIMO'].sum())
-        mape_colab_promedio = round(df_kpi['MAPE_COLABORADO_%'].mean(), 1) if len(df_kpi) > 0 else 0.0
+        total_colab = int(df_filt['COLABORADO_ULTIMO'].sum())
+        mape_colab_promedio = round(df_filt['MAPE_COLABORADO_%'].mean(), 1) if len(df_filt) > 0 else 0.0
         
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric(f"Real {nombre_ultimo}", f"{total_real:,.0f}".replace(',', '.'))
@@ -364,7 +386,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # ==================== FILA 3: GRÁFICO ====================
+    # ==================== GRÁFICO ====================
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -376,7 +398,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
 
     proyeccion = []
     for col in nombres_columnas_pron[:horizonte]:
-        proyeccion.append(df_kpi[col].sum() if col in df_kpi.columns else 0)
+        proyeccion.append(df_filt[col].sum() if col in df_filt.columns else 0)
 
     fig.add_trace(go.Scatter(x=fechas_futuras, y=proyeccion,
                              mode='lines+markers', name='Proyección',
@@ -404,27 +426,16 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     
     st.plotly_chart(fig, use_container_width=True)
 
-    # ==================== FILA 4: TÍTULO + FILTRO REAL + TABLA ====================
-    col_titulo, col_filtro = st.columns([3, 2])
-    with col_titulo:
-        st.subheader("📋 Detalle por producto (agregado)")
-    with col_filtro:
-        col_min, col_max = st.columns(2)
-        with col_min:
-            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
-        with col_max:
-            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+    # ==================== TABLA ====================
+    st.subheader("📋 Detalle por producto (agregado)")
     
-    # Aplicar filtro REAL a la tabla
-    df_tabla = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
-
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
     columnas_pron = nombres_columnas_pron[:min(horizonte, 6)]
     if usar_colaborado:
         columnas_fijas.extend(['COLABORADO_ULTIMO', 'MAPE_COLABORADO_%'])
     columnas_tabla = columnas_fijas + columnas_pron
-    st.dataframe(df_tabla[columnas_tabla], use_container_width=True)
+    st.dataframe(df_filt[columnas_tabla], use_container_width=True)
 
     # --- DESCARGA EXCEL ---
     output = BytesIO()
@@ -489,6 +500,14 @@ if proyectos:
                     st.session_state.proyecto_nombre = p['nombre']
                     st.rerun()
         with col2:
+            if st.button("✏️", key=f"rename_{p['nombre']}"):
+                nuevo_nombre = st.text_input("Nuevo nombre", value=p['nombre'], key=f"rename_input_{p['nombre']}")
+                if st.button("Guardar", key=f"save_rename_{p['nombre']}"):
+                    if renombrar_proyecto(p['nombre'], nuevo_nombre):
+                        st.success(f"Proyecto renombrado a '{nuevo_nombre}'")
+                        st.rerun()
+                    else:
+                        st.error("Error al renombrar")
             if st.button("🗑️", key=f"del_{p['nombre']}"):
                 eliminar_proyecto(p['nombre'])
                 st.rerun()
@@ -496,17 +515,21 @@ if proyectos:
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Crear nuevo proyecto")
 
-with st.sidebar.form("nuevo_proyecto_form"):
+# Usar un formulario que se limpie automáticamente después de enviar
+with st.sidebar.form("nuevo_proyecto_form", clear_on_submit=True):
     nombre_nuevo = st.text_input("Nombre del proyecto (ej: Febrero 2026)")
     archivo_subido = st.file_uploader("Subir archivo Excel", type=["xlsx", "xls"], key="nuevo_proyecto")
     rango_ventas_nuevo = st.text_input("Rango de columnas de ventas", value="I:BF")
     horizonte_nuevo = st.slider("Horizonte de pronóstico (meses)", 1, 12, 12)
     usar_colaborado_nuevo = st.checkbox("Incluir plan colaborado", value=False)
+    
     col_colaborado_nuevo = None
     if usar_colaborado_nuevo:
-        col_colaborado_nuevo = st.text_input("Columna del colaborado", value="CC").strip().upper()
+        col_colaborado_nuevo = st.text_input("Columna del colaborado (ej: CC)", value="CC").strip().upper()
     
-    if st.form_submit_button("🚀 Crear y procesar proyecto"):
+    submit_nuevo = st.form_submit_button("🚀 Crear y procesar proyecto")
+    
+    if submit_nuevo:
         if not nombre_nuevo:
             st.error("Ingrese un nombre")
         elif not archivo_subido:
@@ -518,7 +541,7 @@ with st.sidebar.form("nuevo_proyecto_form"):
                         archivo_subido, rango_ventas_nuevo, horizonte_nuevo,
                         usar_colaborado_nuevo, col_colaborado_nuevo)
                     guardar_proyecto(nombre_nuevo, df_final, df_agg, fechas_dt, uc,
-                                    horizonte_nuevo, nombres_cols, rango_ventas_nuevo, hist_totales)
+                                    horizonte_nuevo, nombres_cols, rango_ventas_nuevo, hist_totales, col_colaborado_nuevo)
                     st.success(f"Proyecto '{nombre_nuevo}' creado exitosamente")
                     proyecto = cargar_proyecto(nombre_nuevo)
                     if proyecto:
@@ -537,7 +560,7 @@ if st.session_state.proyecto_actual:
         st.rerun()
     mostrar_resultados(proyecto['df_final'], proyecto['df_agg'], proyecto['usar_colaborado'],
                       proyecto['horizonte'], proyecto['fechas_dt'], proyecto['hist_totales'],
-                      proyecto['nombres_columnas_pron'])
+                      proyecto['nombres_columnas_pron'], proyecto.get('col_colaborado', None))
 else:
     st.title("🏛️ Sistema de Pronóstico de Demanda")
     st.markdown("""
