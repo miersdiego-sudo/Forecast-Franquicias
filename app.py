@@ -17,7 +17,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Pronóstico IA - Amandau", layout="wide")
 
-# --- ESTILOS CSS PARA BORDE DEL GRÁFICO ---
+# --- ESTILOS CSS PARA BORDE DEL GRÁFICO Y ESPACIOS ---
 st.markdown("""
 <style>
     /* Borde para el gráfico */
@@ -28,7 +28,12 @@ st.markdown("""
         background-color: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         margin-top: 10px;
-        margin-bottom: 20px;
+        margin-bottom: 40px;
+    }
+    
+    /* Espacio entre secciones */
+    .section-spacing {
+        margin-bottom: 30px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -329,6 +334,21 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     if prod_sel:
         df_filt = df_filt[df_filt['DESCRIPCION'] == prod_sel]
 
+    # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
+    # Primero definimos el filtro REAL para poder aplicarlo a los KPIs también
+    col_titulo1, col_titulo2 = st.columns([3, 2])
+    with col_titulo1:
+        st.subheader("📋 Detalle por producto (agregado)")
+    with col_titulo2:
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+    
+    # Aplicar filtro de REAL a los datos (para KPIs y tabla)
+    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
+
     # --- KPIs (calculados sobre los datos FILTRADOS) ---
     total_real = int(df_filt['REAL_ULTIMO'].sum())
     total_pron = int(df_filt['PRON_ULTIMO'].sum())
@@ -398,23 +418,13 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         )
     )
     
-    # El borde se aplica automáticamente por CSS a .stPlotlyChart
+    # El borde se aplica automáticamente por CSS a .stPlotlyChart con margin-bottom: 40px
     st.plotly_chart(fig, use_container_width=True)
-
-    # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
-    col_titulo1, col_titulo2 = st.columns([3, 2])
-    with col_titulo1:
-        st.subheader("📋 Detalle por producto (agregado)")
-    with col_titulo2:
-        col_min, col_max = st.columns(2)
-        with col_min:
-            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
-        with col_max:
-            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
     
-    # Aplicar filtro de REAL a la tabla
-    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
+    # Espacio adicional entre gráfico y tabla
+    st.markdown("<br>", unsafe_allow_html=True)
 
+    # --- TABLA DE PRODUCTOS (mostrar los datos ya filtrados) ---
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
     columnas_pron = nombres_columnas_pron[:min(horizonte, 6)]
