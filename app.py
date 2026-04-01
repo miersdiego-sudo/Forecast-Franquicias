@@ -10,6 +10,16 @@ import os
 import pickle
 from io import BytesIO
 from datetime import datetime
+import locale
+
+# Configurar locale para formato de números con punto como separador decimal
+try:
+    locale.setlocale(locale.LC_ALL, 'es_ES.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_ALL, 'Spanish_Spain.1252')
+    except:
+        pass
 
 # =====================================================
 # 1. CONFIGURACIÓN INICIAL
@@ -27,7 +37,7 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         margin-top: 10px;
         margin-bottom: 40px;
-        width: 100%;
+        width: 100% !important;
     }
     div[data-testid="stMetric"] {
         border: 1px solid #e0e0e0;
@@ -35,6 +45,10 @@ st.markdown("""
         padding: 10px;
         background-color: #fafafa;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    /* Forzar que el gráfico ocupe todo el ancho */
+    .js-plotly-plot, .plotly-graph-div {
+        width: 100% !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -47,6 +61,12 @@ USUARIOS = {
     "amandau": "amandau_2026",
     "analista": "pronostico2024"
 }
+
+# Función para formatear números con punto como separador de miles y punto decimal
+def format_number(num):
+    if isinstance(num, (int, float)):
+        return f"{num:,.0f}".replace(',', '.')
+    return num
 
 # =====================================================
 # 2. FUNCIONES DE AUTENTICACIÓN Y PROYECTOS
@@ -374,6 +394,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     
     st.subheader("📊 Resultado Global")
     
+    # Formatear números con punto como separador de miles
     if usar_colaborado:
         total_colab = int(df_filt['COLABORADO_ULTIMO'].sum())
         mape_colab_promedio = round(df_filt['MAPE_COLABORADO_%'].mean(), 1) if len(df_filt) > 0 else 0.0
@@ -396,12 +417,19 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
     
-    # Crear DataFrame con los valores históricos
+    # Crear DataFrame con los valores históricos (solo últimos 24 meses para mejor visualización)
     if hist_totales is not None and len(hist_totales) == len(fechas_dt):
-        df_hist = pd.DataFrame({
-            'Fecha': fechas_dt,
-            'Venta Real': hist_totales.values
-        })
+        # Tomar solo los últimos 24 meses para mejor visualización
+        if len(fechas_dt) > 24:
+            df_hist = pd.DataFrame({
+                'Fecha': fechas_dt[-24:],
+                'Venta Real': hist_totales.values[-24:]
+            })
+        else:
+            df_hist = pd.DataFrame({
+                'Fecha': fechas_dt,
+                'Venta Real': hist_totales.values
+            })
     else:
         df_hist = pd.DataFrame({'Fecha': [], 'Venta Real': []})
     
@@ -452,7 +480,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
             hoverinfo='skip'
         ))
     
-    # Configuración del layout
+    # Configuración del layout con autosize y márgenes mínimos
     fig.update_layout(
         title={
             'text': "Histórico de ventas y proyección",
@@ -463,9 +491,9 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         xaxis_title="Fecha",
         yaxis_title="Ventas (unidades)",
         hovermode="x unified",
-        height=450,
+        height=500,
         autosize=True,
-        margin=dict(l=40, r=40, t=70, b=50),
+        margin=dict(l=20, r=20, t=70, b=50),
         plot_bgcolor='white',
         paper_bgcolor='white',
         xaxis=dict(
@@ -476,7 +504,8 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
             gridcolor='#e6e6e6',
             showline=True,
             linewidth=1,
-            linecolor='#cccccc'
+            linecolor='#cccccc',
+            automargin=True
         ),
         yaxis=dict(
             showgrid=True,
@@ -485,7 +514,8 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
             showline=True,
             linewidth=1,
             linecolor='#cccccc',
-            tickformat=",.0f"
+            tickformat=",.0f",
+            automargin=True
         ),
         legend=dict(
             orientation="h",
@@ -502,7 +532,8 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    # Forzar que el gráfico ocupe todo el ancho disponible
+    st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
 
     # ==================== TABLA con espacio extra ====================
     st.markdown("<br>", unsafe_allow_html=True)
