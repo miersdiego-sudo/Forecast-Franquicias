@@ -452,6 +452,10 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
 # 6. INTERFAZ PRINCIPAL
 # =====================================================
 
+# Inicializar estado de pestaña
+if 'tab_actual' not in st.session_state:
+    st.session_state.tab_actual = 0
+
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 if 'proyecto_actual' not in st.session_state:
@@ -479,9 +483,12 @@ if st.sidebar.button("🚪 Cerrar sesión"):
     st.session_state.proyecto_actual = None
     st.rerun()
 
-tab1, tab2 = st.tabs(["📁 Gestión de Proyectos", "📊 Análisis"])
+# Pestañas con control de índice
+tab_titles = ["📁 Gestión de Proyectos", "📊 Análisis"]
+tabs = st.tabs(tab_titles)
 
-with tab1:
+# Pestaña 1: Gestión de Proyectos
+with tabs[0]:
     st.header("Gestión de Proyectos")
     
     with st.expander("➕ Crear nuevo proyecto", expanded=True):
@@ -520,6 +527,7 @@ with tab1:
                             if proyecto:
                                 st.session_state.proyecto_actual = proyecto
                                 st.session_state.proyecto_nombre = nombre_nuevo
+                                st.session_state.tab_actual = 1  # Cambiar a pestaña de análisis
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Error: {e}")
@@ -539,6 +547,7 @@ with tab1:
                     if proyecto:
                         st.session_state.proyecto_actual = proyecto
                         st.session_state.proyecto_nombre = p['nombre']
+                        st.session_state.tab_actual = 1  # Cambiar a pestaña de análisis
                         st.success(f"Proyecto '{p['nombre']}' cargado")
                         st.rerun()
             with col3:
@@ -557,7 +566,8 @@ with tab1:
     else:
         st.info("No hay proyectos guardados. Crea uno nuevo usando el formulario de arriba.")
 
-with tab2:
+# Pestaña 2: Análisis
+with tabs[1]:
     if st.session_state.proyecto_actual:
         proyecto = st.session_state.proyecto_actual
         st.title(f"📊 Pronóstico - {st.session_state.proyecto_nombre}")
