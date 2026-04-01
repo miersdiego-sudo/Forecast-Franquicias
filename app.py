@@ -28,9 +28,6 @@ st.markdown("""
         margin-top: 10px;
         margin-bottom: 40px;
     }
-    .section-spacing {
-        margin-bottom: 30px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -295,7 +292,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     nombre_ultimo = ultimo_mes.strftime('%b %Y')
     nombre_siguiente = siguiente_mes.strftime('%b %Y')
 
-    # --- FILTROS (Gerencia, Familia, Producto) ---
+    # --- FILTROS DE PRODUCTO (Gerencia, Familia, Producto) ---
     st.subheader("🔍 Filtros de productos")
     
     col_f1, col_f2, col_f3 = st.columns(3)
@@ -304,27 +301,44 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         gerencias = sorted(df_agg['GERENCIA'].unique())
         gerencias_sel = st.multiselect("Gerencia", gerencias, default=gerencias)
     
+    # Filtrar por gerencia
     if gerencias_sel:
-        df_filt = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
+        df_temp = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
     else:
-        df_filt = df_agg
+        df_temp = df_agg
     
     with col_f2:
-        familias = sorted(df_filt['ARTICULO_FAMILIA'].unique())
+        familias = sorted(df_temp['ARTICULO_FAMILIA'].unique())
         familias_sel = st.multiselect("Familia", familias, default=familias)
     
+    # Filtrar por familia
     if familias_sel:
-        df_filt = df_filt[df_filt['ARTICULO_FAMILIA'].isin(familias_sel)]
+        df_temp = df_temp[df_temp['ARTICULO_FAMILIA'].isin(familias_sel)]
     
     with col_f3:
-        productos = sorted(df_filt['DESCRIPCION'].unique())
+        productos = sorted(df_temp['DESCRIPCION'].unique())
         prod_sel = st.selectbox("Producto (búsqueda)", options=[""] + productos, index=0,
                                 format_func=lambda x: "🔍 Buscar..." if x == "" else x)
     
+    # Filtrar por producto
     if prod_sel:
-        df_filt = df_filt[df_filt['DESCRIPCION'] == prod_sel]
+        df_temp = df_temp[df_temp['DESCRIPCION'] == prod_sel]
 
-    # --- KPIs (calculados sobre datos filtrados por gerencia/familia/producto) ---
+    # --- TÍTULO DETALLE con filtro REAL al lado ---
+    col_titulo1, col_titulo2 = st.columns([3, 2])
+    with col_titulo1:
+        st.subheader("📋 Detalle por producto (agregado)")
+    with col_titulo2:
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+    
+    # APLICAR TODOS LOS FILTROS (incluyendo REAL) al DataFrame final
+    df_filt = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
+
+    # --- KPIs (calculados sobre datos ya filtrados) ---
     total_real = int(df_filt['REAL_ULTIMO'].sum())
     total_pron = int(df_filt['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
@@ -398,23 +412,9 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     st.plotly_chart(fig, use_container_width=True)
 
     # --- ESPACIO ---
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- TÍTULO DETALLE con filtro REAL al lado ---
-    col_titulo1, col_titulo2 = st.columns([3, 2])
-    with col_titulo1:
-        st.subheader("📋 Detalle por producto (agregado)")
-    with col_titulo2:
-        col_min, col_max = st.columns(2)
-        with col_min:
-            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
-        with col_max:
-            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
-    
-    # Aplicar filtro REAL a la tabla
-    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
-
-    # --- TABLA ---
+    # --- TABLA (usando el mismo df_filt ya filtrado) ---
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
     columnas_pron = nombres_columnas_pron[:min(horizonte, 6)]
