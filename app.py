@@ -26,7 +26,14 @@ st.markdown("""
         background-color: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         margin-top: 10px;
-        margin-bottom: 40px;
+        margin-bottom: 20px;
+    }
+    div[data-testid="stMetric"] {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 10px;
+        background-color: #fafafa;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -292,64 +299,56 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     nombre_ultimo = ultimo_mes.strftime('%b %Y')
     nombre_siguiente = siguiente_mes.strftime('%b %Y')
 
-    # --- FILTROS DE PRODUCTO (Gerencia, Familia, Producto) ---
+    # ==================== FILA 1: FILTROS DE PRODUCTO ====================
     st.subheader("🔍 Filtros de productos")
-    
     col_f1, col_f2, col_f3 = st.columns(3)
     
     with col_f1:
         gerencias = sorted(df_agg['GERENCIA'].unique())
         gerencias_sel = st.multiselect("Gerencia", gerencias, default=gerencias)
     
-    # Filtrar por gerencia
-    if gerencias_sel:
-        df_temp = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
-    else:
-        df_temp = df_agg
-    
     with col_f2:
+        if gerencias_sel:
+            df_temp = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
+        else:
+            df_temp = df_agg
         familias = sorted(df_temp['ARTICULO_FAMILIA'].unique())
         familias_sel = st.multiselect("Familia", familias, default=familias)
     
-    # Filtrar por familia
-    if familias_sel:
-        df_temp = df_temp[df_temp['ARTICULO_FAMILIA'].isin(familias_sel)]
-    
     with col_f3:
+        if familias_sel:
+            df_temp = df_temp[df_temp['ARTICULO_FAMILIA'].isin(familias_sel)]
         productos = sorted(df_temp['DESCRIPCION'].unique())
         prod_sel = st.selectbox("Producto (búsqueda)", options=[""] + productos, index=0,
                                 format_func=lambda x: "🔍 Buscar..." if x == "" else x)
     
-    # Filtrar por producto
+    # Aplicar filtros de producto
+    if gerencias_sel:
+        df_temp = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
+    else:
+        df_temp = df_agg
+    if familias_sel:
+        df_temp = df_temp[df_temp['ARTICULO_FAMILIA'].isin(familias_sel)]
     if prod_sel:
         df_temp = df_temp[df_temp['DESCRIPCION'] == prod_sel]
 
-    # --- TÍTULO DETALLE con filtro REAL al lado ---
-    col_titulo1, col_titulo2 = st.columns([3, 2])
-    with col_titulo1:
-        st.subheader("📋 Detalle por producto (agregado)")
-    with col_titulo2:
-        col_min, col_max = st.columns(2)
-        with col_min:
-            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
-        with col_max:
-            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+    # ==================== FILA 2: KPIs ====================
+    # Aplicar filtro REAL para KPIs (valores por defecto amplios para mostrar todo)
+    filtro_min_kpi = 0
+    filtro_max_kpi = 99999999
+    df_kpi = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min_kpi) & (df_temp['REAL_ULTIMO'] <= filtro_max_kpi)]
     
-    # APLICAR FILTRO REAL - este será el DataFrame definitivo para todo
-    df_filt = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
-
-    # --- KPIs (calculados sobre datos ya filtrados) ---
-    total_real = int(df_filt['REAL_ULTIMO'].sum())
-    total_pron = int(df_filt['PRON_ULTIMO'].sum())
+    total_real = int(df_kpi['REAL_ULTIMO'].sum())
+    total_pron = int(df_kpi['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
-    total_pron_marzo = int(df_filt[primer_mes_futuro].sum()) if primer_mes_futuro in df_filt.columns else 0
-    mape_promedio = round(df_filt['MAPE_%'].mean(), 1) if len(df_filt) > 0 else 0.0
+    total_pron_marzo = int(df_kpi[primer_mes_futuro].sum()) if primer_mes_futuro in df_kpi.columns else 0
+    mape_promedio = round(df_kpi['MAPE_%'].mean(), 1) if len(df_kpi) > 0 else 0.0
 
     st.subheader("📊 Resultado Global")
     
     if usar_colaborado:
-        total_colab = int(df_filt['COLABORADO_ULTIMO'].sum())
-        mape_colab_promedio = round(df_filt['MAPE_COLABORADO_%'].mean(), 1) if len(df_filt) > 0 else 0.0
+        total_colab = int(df_kpi['COLABORADO_ULTIMO'].sum())
+        mape_colab_promedio = round(df_kpi['MAPE_COLABORADO_%'].mean(), 1) if len(df_kpi) > 0 else 0.0
         
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric(f"Real {nombre_ultimo}", f"{total_real:,.0f}".replace(',', '.'))
@@ -365,7 +364,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO ---
+    # ==================== FILA 3: GRÁFICO ====================
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -377,7 +376,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
 
     proyeccion = []
     for col in nombres_columnas_pron[:horizonte]:
-        proyeccion.append(df_filt[col].sum() if col in df_filt.columns else 0)
+        proyeccion.append(df_kpi[col].sum() if col in df_kpi.columns else 0)
 
     fig.add_trace(go.Scatter(x=fechas_futuras, y=proyeccion,
                              mode='lines+markers', name='Proyección',
@@ -400,28 +399,32 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         height=420,
         margin=dict(l=60, r=20, t=60, b=80),
         xaxis=dict(tickformat="%d/%m/%Y", tickangle=45),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5
-        )
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
     )
     
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- ESPACIO ---
-    st.markdown("<br>", unsafe_allow_html=True)
+    # ==================== FILA 4: TÍTULO + FILTRO REAL + TABLA ====================
+    col_titulo, col_filtro = st.columns([3, 2])
+    with col_titulo:
+        st.subheader("📋 Detalle por producto (agregado)")
+    with col_filtro:
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+    
+    # Aplicar filtro REAL a la tabla
+    df_tabla = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
 
-    # --- TABLA (usando el mismo df_filt ya filtrado) ---
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
     columnas_pron = nombres_columnas_pron[:min(horizonte, 6)]
     if usar_colaborado:
         columnas_fijas.extend(['COLABORADO_ULTIMO', 'MAPE_COLABORADO_%'])
     columnas_tabla = columnas_fijas + columnas_pron
-    st.dataframe(df_filt[columnas_tabla], use_container_width=True)
+    st.dataframe(df_tabla[columnas_tabla], use_container_width=True)
 
     # --- DESCARGA EXCEL ---
     output = BytesIO()
