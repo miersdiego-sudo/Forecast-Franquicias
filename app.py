@@ -26,7 +26,7 @@ st.markdown("""
         background-color: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         margin-top: 10px;
-        margin-bottom: 20px;
+        margin-bottom: 40px;
     }
     div[data-testid="stMetric"] {
         border: 1px solid #e0e0e0;
@@ -391,7 +391,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # ==================== GRÁFICO ====================
+    # ==================== GRÁFICO con márgenes ajustados ====================
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -423,15 +423,17 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         xaxis_title="Fecha",
         yaxis_title="Ventas (unidades)",
         hovermode="x unified",
-        height=420,
-        margin=dict(l=60, r=20, t=60, b=80),
-        xaxis=dict(tickformat="%d/%m/%Y", tickangle=45),
+        height=450,
+        margin=dict(l=20, r=20, t=60, b=50),  # Reducido el margen izquierdo y derecho
+        xaxis=dict(tickformat="%d/%m/%Y", tickangle=45, showgrid=True, gridwidth=1, gridcolor='#e0e0e0'),
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='#e0e0e0'),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
     )
     
     st.plotly_chart(fig, use_container_width=True)
 
-    # ==================== TABLA ====================
+    # ==================== TABLA con espacio extra ====================
+    st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("📋 Detalle por producto (agregado)")
     
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
