@@ -452,14 +452,12 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
 # 6. INTERFAZ PRINCIPAL
 # =====================================================
 
-# Inicializar estado de pestaña
-if 'tab_actual' not in st.session_state:
-    st.session_state.tab_actual = 0
-
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 if 'proyecto_actual' not in st.session_state:
     st.session_state.proyecto_actual = None
+if 'mostrar_analisis' not in st.session_state:
+    st.session_state.mostrar_analisis = False
 
 if not st.session_state.autenticado:
     st.title("🔐 Acceso al Sistema de Pronósticos")
@@ -481,15 +479,33 @@ st.sidebar.title(f"👤 {st.session_state.usuario}")
 if st.sidebar.button("🚪 Cerrar sesión"):
     st.session_state.autenticado = False
     st.session_state.proyecto_actual = None
+    st.session_state.mostrar_analisis = False
     st.rerun()
 
-# Pestañas con control de índice
-tab_titles = ["📁 Gestión de Proyectos", "📊 Análisis"]
-tabs = st.tabs(tab_titles)
+# =====================================================
+# PANTALLA PRINCIPAL
+# =====================================================
 
-# Pestaña 1: Gestión de Proyectos
-with tabs[0]:
-    st.header("Gestión de Proyectos")
+if st.session_state.mostrar_analisis and st.session_state.proyecto_actual:
+    # Mostrar análisis del proyecto cargado
+    proyecto = st.session_state.proyecto_actual
+    
+    st.title(f"📊 Pronóstico - {st.session_state.proyecto_nombre}")
+    st.caption(f"Proyecto guardado localmente")
+    
+    if st.button("◀️ Volver a proyectos"):
+        st.session_state.mostrar_analisis = False
+        st.session_state.proyecto_actual = None
+        st.rerun()
+    
+    st.markdown("---")
+    
+    mostrar_resultados(proyecto['df_final'], proyecto['df_agg'], proyecto['usar_colaborado'],
+                      proyecto['horizonte'], proyecto['fechas_dt'], proyecto['hist_totales'],
+                      proyecto['nombres_columnas_pron'], proyecto.get('col_colaborado', None))
+else:
+    # Mostrar gestión de proyectos
+    st.header("📁 Gestión de Proyectos")
     
     with st.expander("➕ Crear nuevo proyecto", expanded=True):
         with st.form("nuevo_proyecto_form", clear_on_submit=True):
@@ -527,7 +543,7 @@ with tabs[0]:
                             if proyecto:
                                 st.session_state.proyecto_actual = proyecto
                                 st.session_state.proyecto_nombre = nombre_nuevo
-                                st.session_state.tab_actual = 1  # Cambiar a pestaña de análisis
+                                st.session_state.mostrar_analisis = True
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Error: {e}")
@@ -547,7 +563,7 @@ with tabs[0]:
                     if proyecto:
                         st.session_state.proyecto_actual = proyecto
                         st.session_state.proyecto_nombre = p['nombre']
-                        st.session_state.tab_actual = 1  # Cambiar a pestaña de análisis
+                        st.session_state.mostrar_analisis = True
                         st.success(f"Proyecto '{p['nombre']}' cargado")
                         st.rerun()
             with col3:
@@ -565,22 +581,3 @@ with tabs[0]:
             st.divider()
     else:
         st.info("No hay proyectos guardados. Crea uno nuevo usando el formulario de arriba.")
-
-# Pestaña 2: Análisis
-with tabs[1]:
-    if st.session_state.proyecto_actual:
-        proyecto = st.session_state.proyecto_actual
-        st.title(f"📊 Pronóstico - {st.session_state.proyecto_nombre}")
-        st.caption(f"Proyecto guardado localmente")
-        
-        if st.button("◀️ Volver a gestión de proyectos"):
-            st.session_state.proyecto_actual = None
-            st.rerun()
-        
-        st.markdown("---")
-        
-        mostrar_resultados(proyecto['df_final'], proyecto['df_agg'], proyecto['usar_colaborado'],
-                          proyecto['horizonte'], proyecto['fechas_dt'], proyecto['hist_totales'],
-                          proyecto['nombres_columnas_pron'], proyecto.get('col_colaborado', None))
-    else:
-        st.info("📁 No hay un proyecto cargado. Ve a la pestaña 'Gestión de Proyectos' para crear o cargar un proyecto.")
