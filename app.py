@@ -17,68 +17,6 @@ from datetime import datetime
 
 st.set_page_config(page_title="Pronóstico IA - Amandau", layout="wide")
 
-# --- ESTILOS CSS ---
-st.markdown("""
-<style>
-    /* Bordes para KPIs */
-    div[data-testid="stMetric"] {
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 10px;
-        background-color: #fafafa;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    div[data-testid="stMetric"] label {
-        font-weight: 500;
-    }
-    
-    /* Borde para el contenedor del gráfico */
-    .chart-container {
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 10px;
-        background-color: #ffffff;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        margin-top: 10px;
-        margin-bottom: 10px;
-    }
-    
-    /* Borde para recuadros de filtros */
-    .filtros-container {
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 15px;
-        background-color: #fafafa;
-        margin-bottom: 15px;
-    }
-    .filtros-container h4 {
-        margin-top: 0;
-        margin-bottom: 10px;
-        color: #333;
-        font-size: 16px;
-    }
-    
-    /* Eliminar TODOS los bordes horizontales */
-    hr,
-    .stMarkdown hr,
-    [data-testid="stHorizontalBlock"] hr,
-    .element-container:has(hr),
-    .stHorizontalBlock hr {
-        display: none !important;
-    }
-    
-    /* Eliminar el borde que aparece después del título */
-    .stSubheader {
-        border-bottom: none !important;
-    }
-    
-    /* Eliminar líneas divisoras de Streamlit */
-    .stDivider {
-        display: none !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # Directorio de proyectos
 PROYECTOS_DIR = "proyectos"
 if not os.path.exists(PROYECTOS_DIR):
@@ -344,9 +282,8 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     nombre_ultimo = ultimo_mes.strftime('%b %Y')
     nombre_siguiente = siguiente_mes.strftime('%b %Y')
 
-    # --- FILTROS CON BORDE (Gerencia, Familia, Producto) ---
-    st.markdown('<div class="filtros-container">', unsafe_allow_html=True)
-    st.markdown('<h4>🔍 Filtros de productos</h4>', unsafe_allow_html=True)
+    # --- FILTROS (Gerencia, Familia, Producto) ---
+    st.subheader("🔍 Filtros de productos")
     
     col_f1, col_f2, col_f3 = st.columns(3)
     
@@ -375,20 +312,28 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     
     if prod_sel:
         df_filt = df_filt[df_filt['DESCRIPCION'] == prod_sel]
-    
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- KPIs ---
-    total_real = int(df_agg['REAL_ULTIMO'].sum())
-    total_pron = int(df_agg['PRON_ULTIMO'].sum())
+    # --- FILTRO REAL (para tabla y KPIs) ---
+    col_min, col_max = st.columns(2)
+    with col_min:
+        filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min")
+    with col_max:
+        filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max")
+    
+    # Aplicar filtro de REAL a los datos
+    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
+
+    # --- KPIs (calculados sobre los datos FILTRADOS) ---
+    total_real = int(df_filt['REAL_ULTIMO'].sum())
+    total_pron = int(df_filt['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
-    total_pron_marzo = int(df_agg[primer_mes_futuro].sum()) if primer_mes_futuro in df_agg.columns else 0
+    total_pron_marzo = int(df_filt[primer_mes_futuro].sum()) if primer_mes_futuro in df_filt.columns else 0
     mape_promedio = round(df_filt['MAPE_%'].mean(), 1) if len(df_filt) > 0 else 0.0
 
     st.subheader("📊 Resultado Global")
     
     if usar_colaborado:
-        total_colab = int(df_agg['COLABORADO_ULTIMO'].sum())
+        total_colab = int(df_filt['COLABORADO_ULTIMO'].sum())
         mape_colab_promedio = round(df_filt['MAPE_COLABORADO_%'].mean(), 1) if len(df_filt) > 0 else 0.0
         
         c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -405,7 +350,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO con borde ---
+    # --- GRÁFICO ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -447,28 +392,11 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         )
     )
     
-    # Contenedor con borde para el gráfico
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Espacio entre gráfico y tabla
-    st.markdown("<div style='margin-bottom: 40px;'></div>", unsafe_allow_html=True)
 
-    # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
-    col_titulo1, col_titulo2 = st.columns([3, 2])
-    with col_titulo1:
-        st.subheader("📋 Detalle por producto (agregado)")
-    with col_titulo2:
-        col_min, col_max = st.columns(2)
-        with col_min:
-            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
-        with col_max:
-            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
+    # --- TABLA DE PRODUCTOS ---
+    st.subheader("📋 Detalle por producto (agregado)")
     
-    # Aplicar filtro de REAL a la tabla
-    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
-
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
     columnas_pron = nombres_columnas_pron[:min(horizonte, 6)]
