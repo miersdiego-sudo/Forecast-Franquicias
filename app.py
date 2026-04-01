@@ -314,31 +314,45 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     nombre_ultimo = ultimo_mes.strftime('%b %Y')
     nombre_siguiente = siguiente_mes.strftime('%b %Y')
 
-    if usar_colaborado and col_colaborado:
-        st.info(f"📊 Plan colaborado activo - Columna: {col_colaborado}")
-
-    st.subheader("🔍 Filtros de productos")
-    col_f1, col_f2, col_f3 = st.columns(3)
-    
-    with col_f1:
+    # ==================== FILTROS EN LA BARRA LATERAL ====================
+    with st.sidebar:
+        st.markdown("---")
+        st.subheader("🔍 Filtros de análisis")
+        
+        # Filtros de producto
+        st.markdown("**Productos**")
         gerencias = sorted(df_agg['GERENCIA'].unique())
         gerencias_sel = st.multiselect("Gerencia", gerencias, default=gerencias)
-    
-    with col_f2:
+        
         if gerencias_sel:
             df_temp = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
         else:
             df_temp = df_agg
+        
         familias = sorted(df_temp['ARTICULO_FAMILIA'].unique())
         familias_sel = st.multiselect("Familia", familias, default=familias)
-    
-    with col_f3:
+        
         if familias_sel:
             df_temp = df_temp[df_temp['ARTICULO_FAMILIA'].isin(familias_sel)]
+        
         productos = sorted(df_temp['DESCRIPCION'].unique())
         prod_sel = st.selectbox("Producto (búsqueda)", options=[""] + productos, index=0,
                                 format_func=lambda x: "🔍 Buscar..." if x == "" else x)
+        
+        st.markdown("---")
+        st.markdown("**Rango de ventas reales**")
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max")
+        
+        # Información del colaborado si está activo
+        if usar_colaborado and col_colaborado:
+            st.markdown("---")
+            st.info(f"📊 Plan colaborado activo - Columna: {col_colaborado}")
     
+    # Aplicar filtros
     if gerencias_sel:
         df_temp = df_agg[df_agg['GERENCIA'].isin(gerencias_sel)]
     else:
@@ -347,24 +361,17 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         df_temp = df_temp[df_temp['ARTICULO_FAMILIA'].isin(familias_sel)]
     if prod_sel:
         df_temp = df_temp[df_temp['DESCRIPCION'] == prod_sel]
-
-    col_titulo, col_filtro = st.columns([3, 2])
-    with col_titulo:
-        st.subheader("📊 Resultado Global")
-    with col_filtro:
-        col_min, col_max = st.columns(2)
-        with col_min:
-            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min")
-        with col_max:
-            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max")
     
     df_filt = df_temp[(df_temp['REAL_ULTIMO'] >= filtro_min) & (df_temp['REAL_ULTIMO'] <= filtro_max)]
 
+    # ==================== KPIs ====================
     total_real = int(df_filt['REAL_ULTIMO'].sum())
     total_pron = int(df_filt['PRON_ULTIMO'].sum())
     primer_mes_futuro = nombres_columnas_pron[0] if nombres_columnas_pron else "M1"
     total_pron_marzo = int(df_filt[primer_mes_futuro].sum()) if primer_mes_futuro in df_filt.columns else 0
     mape_promedio = round(df_filt['MAPE_%'].mean(), 1) if len(df_filt) > 0 else 0.0
+    
+    st.subheader("📊 Resultado Global")
     
     if usar_colaborado:
         total_colab = int(df_filt['COLABORADO_ULTIMO'].sum())
@@ -384,6 +391,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
+    # ==================== GRÁFICO ====================
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -423,6 +431,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     
     st.plotly_chart(fig, use_container_width=True)
 
+    # ==================== TABLA ====================
     st.subheader("📋 Detalle por producto (agregado)")
     
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
@@ -433,6 +442,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     columnas_tabla = columnas_fijas + columnas_pron
     st.dataframe(df_filt[columnas_tabla], use_container_width=True)
 
+    # ==================== DESCARGA EXCEL ====================
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_final.to_excel(writer, sheet_name='Pronósticos (líneas)', index=False)
@@ -508,7 +518,6 @@ else:
     st.header("📁 Gestión de Proyectos")
     
     with st.expander("➕ Crear nuevo proyecto", expanded=True):
-        # Usar callbacks para actualizar la visibilidad del campo
         usar_colaborado_nuevo = st.checkbox("Incluir plan colaborado", value=False, key="colaborado_checkbox")
         
         col_colaborado_nuevo = None
