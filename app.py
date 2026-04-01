@@ -17,6 +17,22 @@ from datetime import datetime
 
 st.set_page_config(page_title="Pronóstico IA - Amandau", layout="wide")
 
+# --- ESTILOS CSS PARA BORDE DEL GRÁFICO ---
+st.markdown("""
+<style>
+    /* Borde para el gráfico */
+    .stPlotlyChart {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 10px;
+        background-color: #ffffff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Directorio de proyectos
 PROYECTOS_DIR = "proyectos"
 if not os.path.exists(PROYECTOS_DIR):
@@ -313,16 +329,6 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
     if prod_sel:
         df_filt = df_filt[df_filt['DESCRIPCION'] == prod_sel]
 
-    # --- FILTRO REAL (para tabla y KPIs) ---
-    col_min, col_max = st.columns(2)
-    with col_min:
-        filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min")
-    with col_max:
-        filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max")
-    
-    # Aplicar filtro de REAL a los datos
-    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
-
     # --- KPIs (calculados sobre los datos FILTRADOS) ---
     total_real = int(df_filt['REAL_ULTIMO'].sum())
     total_pron = int(df_filt['PRON_ULTIMO'].sum())
@@ -350,7 +356,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         c3.metric(f"Pronóstico {nombre_siguiente}", f"{total_pron_marzo:,.0f}".replace(',', '.'))
         c4.metric("MAPE pronóstico", f"{mape_promedio:.1f}%")
 
-    # --- GRÁFICO ---
+    # --- GRÁFICO con borde ---
     fecha_ultimo_real = fechas_dt[-1]
     fechas_futuras = pd.date_range(start=fecha_ultimo_real + pd.DateOffset(months=1), periods=horizonte, freq='MS')
 
@@ -392,11 +398,23 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
         )
     )
     
+    # El borde se aplica automáticamente por CSS a .stPlotlyChart
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- TABLA DE PRODUCTOS ---
-    st.subheader("📋 Detalle por producto (agregado)")
+    # --- TABLA DE PRODUCTOS con filtro REAL en el título ---
+    col_titulo1, col_titulo2 = st.columns([3, 2])
+    with col_titulo1:
+        st.subheader("📋 Detalle por producto (agregado)")
+    with col_titulo2:
+        col_min, col_max = st.columns(2)
+        with col_min:
+            filtro_min = st.number_input("REAL mín.", value=0, step=1, key="filtro_min_tabla")
+        with col_max:
+            filtro_max = st.number_input("REAL máx.", value=100000, step=1000, key="filtro_max_tabla")
     
+    # Aplicar filtro de REAL a la tabla
+    df_filt = df_filt[(df_filt['REAL_ULTIMO'] >= filtro_min) & (df_filt['REAL_ULTIMO'] <= filtro_max)]
+
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
     columnas_pron = nombres_columnas_pron[:min(horizonte, 6)]
