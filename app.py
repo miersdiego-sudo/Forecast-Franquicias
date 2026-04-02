@@ -537,7 +537,7 @@ def mostrar_resultados(df_final, df_agg, usar_colaborado, horizonte, fechas_dt,
 
     # ==================== TABLA con espacio extra ====================
     st.markdown("<br>", unsafe_allow_html=True)
-    st.subheader("📋 Detalle por producto (agregado)")
+    st.subheader("📋 Resumen - Pronostico")
     
     columnas_fijas = ['COD_ARTICULO', 'DESCRIPCION', 'ARTICULO_FAMILIA', 'GERENCIA',
                       'REAL_ULTIMO', 'PRON_ULTIMO', 'MAPE_%']
